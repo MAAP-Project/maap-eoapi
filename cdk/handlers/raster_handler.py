@@ -8,11 +8,12 @@ from eoapi.raster.utils import get_secret_dict
 
 # Update postgres env variables before importing titiler.pgstac.main
 pgstac_secret_arn = os.environ["PGSTAC_SECRET_ARN"]
+pgbouncer_host = os.getenv("PGBOUNCER_HOST")
 
 secret = get_secret_dict(pgstac_secret_arn)
 os.environ.update(
     {
-        "postgres_host": secret["host"],
+        "postgres_host": pgbouncer_host or secret["host"],
         "postgres_dbname": secret["dbname"],
         "postgres_user": secret["username"],
         "postgres_pass": secret["password"],
@@ -20,10 +21,9 @@ os.environ.update(
     }
 )
 
+from eoapi.raster.main import app
 from mangum import Mangum
 from titiler.pgstac.db import connect_to_db
-
-from eoapi.raster.main import app
 
 logging.getLogger("mangum.lifespan").setLevel(logging.ERROR)
 logging.getLogger("mangum.http").setLevel(logging.ERROR)
