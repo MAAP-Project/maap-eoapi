@@ -8,7 +8,14 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
 } from "aws-cdk-lib";
-import { Aws, Duration, RemovalPolicy, Stack, StackProps, Tags } from "aws-cdk-lib";
+import {
+  Aws,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  StackProps,
+  Tags,
+} from "aws-cdk-lib";
 import { Construct } from "constructs";
 import {
   BastionHost,
@@ -22,6 +29,7 @@ import {
 import { DomainName } from "@aws-cdk/aws-apigatewayv2-alpha";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
+import { PgBouncer } from "./PgBouncer";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -40,7 +48,7 @@ export class PgStacInfra extends Stack {
       titilerBucketsPath,
     } = props;
 
-    const maapLoggingBucket = new s3.Bucket(this, 'maapLoggingBucket', {
+    const maapLoggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
       accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
       removalPolicy: RemovalPolicy.DESTROY,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -175,6 +183,39 @@ export class PgStacInfra extends Stack {
       titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(permission);
     });
 
+    const titilerLambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+      this,
+      "TitilerLambdaSG",
+      titilerPgstacApi.titilerPgstacLambdaFunction.connections.securityGroups[0]
+        .securityGroupId,
+    );
+
+    const pgBouncer = new PgBouncer(this, "pgbouncer", {
+      instanceName: `pgbouncer-${stage}`,
+      vpc: props.vpc,
+      database: {
+        connections: db.connections,
+        secret: pgstacSecret,
+      },
+      clientSecurityGroups: [titilerLambdaSecurityGroup],
+      usePublicSubnet: props.dbSubnetPublic,
+      pgBouncerConfig: {
+        poolMode: "transaction",
+        maxClientConn: 1000,
+        defaultPoolSize: 20,
+        minPoolSize: 10,
+        reservePoolSize: 5,
+        reservePoolTimeout: 5,
+        maxDbConnections: 50,
+        maxUserConnections: 50,
+      },
+    });
+
+    titilerPgstacApi.titilerPgstacLambdaFunction.addEnvironment(
+      "PGBOUNCER_HOST",
+      pgBouncer.endpoint,
+    );
+
     new BastionHost(this, "bastion-host", {
       vpc,
       db,
@@ -219,7 +260,7 @@ export class PgStacInfra extends Stack {
     });
 
     // STAC Browser Infrastructure
-    const stacBrowserBucket = new s3.Bucket(this, 'stacBrowserBucket', {
+    const stacBrowserBucket = new s3.Bucket(this, "stacBrowserBucket", {
       accessControl: s3.BucketAccessControl.PRIVATE,
       removalPolicy: RemovalPolicy.DESTROY,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -227,24 +268,29 @@ export class PgStacInfra extends Stack {
       enforceSSL: true,
     });
 
-    const stacBrowserOrigin = new cloudfront.Distribution(this, 'stacBrowserDistro', {
-      defaultBehavior: { origin: new origins.S3Origin(stacBrowserBucket) },
-      defaultRootObject: 'index.html',
-      domainNames: [props.stacBrowserCustomDomainName],
-      certificate: acm.Certificate.fromCertificateArn(
-        this,
-        "stacBrowserCustomDomainNameCertificate",
-        props.stacBrowserCertificateArn,
-      ),
-      enableLogging: true,
-      logBucket: maapLoggingBucket,
-      logFilePrefix: 'stac-browser',
-    });
-    
+    const stacBrowserOrigin = new cloudfront.Distribution(
+      this,
+      "stacBrowserDistro",
+      {
+        defaultBehavior: { origin: new origins.S3Origin(stacBrowserBucket) },
+        defaultRootObject: "index.html",
+        domainNames: [props.stacBrowserCustomDomainName],
+        certificate: acm.Certificate.fromCertificateArn(
+          this,
+          "stacBrowserCustomDomainNameCertificate",
+          props.stacBrowserCertificateArn,
+        ),
+        enableLogging: true,
+        logBucket: maapLoggingBucket,
+        logFilePrefix: "stac-browser",
+      },
+    );
+
     new StacBrowser(this, "stac-browser", {
       bucketArn: stacBrowserBucket.bucketArn,
-      stacCatalogUrl: props.stacApiCustomDomainName.startsWith('https://') ? 
-        props.stacApiCustomDomainName : `https://${props.stacApiCustomDomainName}/`,
+      stacCatalogUrl: props.stacApiCustomDomainName.startsWith("https://")
+        ? props.stacApiCustomDomainName
+        : `https://${props.stacApiCustomDomainName}/`,
       githubRepoTag: props.stacBrowserRepoTag,
       websiteIndexDocument: "index.html",
     });
@@ -252,31 +298,35 @@ export class PgStacInfra extends Stack {
     const accountId = Aws.ACCOUNT_ID;
     const distributionArn = `arn:aws:cloudfront::${accountId}:distribution/${stacBrowserOrigin.distributionId}`;
 
-    stacBrowserBucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AllowCloudFrontServicePrincipal',
-      effect: iam.Effect.ALLOW, 
-      actions: ['s3:GetObject'],
-      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
-      resources: [stacBrowserBucket.arnForObjects('*')],
-      conditions: {
-        'StringEquals': {
-          'aws:SourceArn': distributionArn,
-        }
-      }
-    }));
+    stacBrowserBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: "AllowCloudFrontServicePrincipal",
+        effect: iam.Effect.ALLOW,
+        actions: ["s3:GetObject"],
+        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+        resources: [stacBrowserBucket.arnForObjects("*")],
+        conditions: {
+          StringEquals: {
+            "aws:SourceArn": distributionArn,
+          },
+        },
+      }),
+    );
 
-    maapLoggingBucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AllowCloudFrontServicePrincipal',
-      effect: iam.Effect.ALLOW,
-      actions: ['s3:PutObject'],
-      resources: [maapLoggingBucket.arnForObjects('AWSLogs/*')],
-      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
-      conditions: {
-        'StringEquals': {
-          'aws:SourceArn': distributionArn, 
-        }, 
-      }, 
-    }));
+    maapLoggingBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: "AllowCloudFrontServicePrincipal",
+        effect: iam.Effect.ALLOW,
+        actions: ["s3:PutObject"],
+        resources: [maapLoggingBucket.arnForObjects("AWSLogs/*")],
+        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+        conditions: {
+          StringEquals: {
+            "aws:SourceArn": distributionArn,
+          },
+        },
+      }),
+    );
   }
 }
 
