@@ -128,6 +128,12 @@ export class PgStacInfra extends Stack {
     });
 
     // titiler-pgstac
+    const dataAccessRole = iam.Role.fromRoleArn(
+      this,
+      "data-access-role",
+      dataAccessRoleArn,
+    );
+
     const fileContents = readFileSync(titilerBucketsPath, "utf8");
     const buckets = load(fileContents) as string[];
 
@@ -196,6 +202,15 @@ export class PgStacInfra extends Stack {
       titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(permission);
     });
 
+    // grant the data reader role to the titiler lambda
+    titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["sts:AssumeRole"],
+        resources: [dataAccessRole.roleArn],
+      }),
+    );
+
     // Configure titiler-pgstac for pgbouncer
     titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
       pgBouncer.instance,
@@ -218,12 +233,6 @@ export class PgStacInfra extends Stack {
       ),
       createElasticIp: props.bastionHostCreateElasticIp,
     });
-
-    const dataAccessRole = iam.Role.fromRoleArn(
-      this,
-      "data-access-role",
-      dataAccessRoleArn,
-    );
 
     new StacIngestor(this, "stac-ingestor", {
       vpc,
