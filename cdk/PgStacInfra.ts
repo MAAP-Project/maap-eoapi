@@ -142,6 +142,7 @@ export class PgStacInfra extends Stack {
         file: "dockerfiles/Dockerfile.raster",
         buildArgs: { PYTHON_VERSION: "3.11" },
       }),
+      role: dataAccessRole,
     };
 
     const titilerPgstacApi = new TitilerPgstacApiLambda(
@@ -201,15 +202,6 @@ export class PgStacInfra extends Stack {
     mosaicPerms.forEach((permission) => {
       titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(permission);
     });
-
-    // grant the data reader role to the titiler lambda
-    titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["sts:AssumeRole"],
-        resources: [dataAccessRole.roleArn],
-      }),
-    );
 
     // Configure titiler-pgstac for pgbouncer
     titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
