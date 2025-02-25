@@ -178,7 +178,8 @@ export class PgStacInfra extends Stack {
 
     // Add dynamodb permissions to the titiler-pgstac Lambda for mosaicjson support
     const tableName = mosaicHost.split("/", 2)[1];
-    const mosaicPerms = [
+
+    const titilerPerms = [
       new iam.PolicyStatement({
         actions: ["dynamodb:CreateTable", "dynamodb:DescribeTable"],
         resources: [
@@ -197,11 +198,20 @@ export class PgStacInfra extends Stack {
           `arn:aws:dynamodb:${stack.region}:${stack.account}:table/${tableName}`,
         ],
       }),
+      new iam.PolicyStatement({
+        actions: [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ],
+        resources: [pgstacSecret.secretArn],
+      }),
     ];
 
-    mosaicPerms.forEach((permission) => {
-      titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(permission);
+    const titilerPolicy = new iam.ManagedPolicy(this, "titilerPolicy", {
+      statements: titilerPerms,
     });
+
+    dataAccessRole.addManagedPolicy(titilerPolicy);
 
     // Configure titiler-pgstac for pgbouncer
     titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
