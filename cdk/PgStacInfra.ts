@@ -22,7 +22,6 @@ import {
 import { DomainName } from "@aws-cdk/aws-apigatewayv2-alpha";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
-import { PgBouncer } from "./PgBouncer";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -57,7 +56,7 @@ export class PgStacInfra extends Stack {
     });
 
     // Pgstac Database
-    const { db, pgstacSecret } = new PgStacDatabase(this, "pgstac-db", {
+    const pgstacDb = new PgStacDatabase(this, "pgstac-db", {
       vpc,
       allowMajorVersionUpgrade: true,
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -70,26 +69,7 @@ export class PgStacInfra extends Stack {
       },
       allocatedStorage: allocatedStorage,
       instanceType: dbInstanceType,
-    });
-
-    // PgBouncer
-    const pgBouncer = new PgBouncer(this, "pgbouncer", {
-      instanceName: `pgbouncer-${stage}`,
-      vpc: props.vpc,
-      database: {
-        instanceType: dbInstanceType,
-        connections: db.connections,
-        secret: pgstacSecret,
-      },
-      usePublicSubnet: props.dbSubnetPublic,
-      pgBouncerConfig: {
-        poolMode: "transaction",
-        maxClientConn: 1000,
-        defaultPoolSize: 20,
-        minPoolSize: 10,
-        reservePoolSize: 5,
-        reservePoolTimeout: 5,
-      },
+      addPgbouncer: true,
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
@@ -106,8 +86,8 @@ export class PgStacInfra extends Stack {
         DESCRIPTION: "STAC API for the MAAP STAC system.",
       },
       vpc,
-      db,
-      dbSecret: pgstacSecret,
+      db: pgstacDb.connectionTarget,
+      dbSecret: pgstacDb.pgstacSecret,
       subnetSelection: apiSubnetSelection,
       stacApiDomainName:
         props.stacApiCustomDomainName && props.certificateArn
@@ -121,6 +101,12 @@ export class PgStacInfra extends Stack {
             })
           : undefined,
     });
+
+    stacApiLambda.stacApiLambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from stac-fastapi-pgstac",
+    );
 
     stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
@@ -157,8 +143,8 @@ export class PgStacInfra extends Stack {
           MOSAIC_HOST: mosaicHost,
         },
         vpc,
-        db,
-        dbSecret: pgstacSecret,
+        db: pgstacDb.connectionTarget,
+        dbSecret: pgstacDb.pgstacSecret,
         subnetSelection: apiSubnetSelection,
         buckets: buckets,
         titilerPgstacApiDomainName:
@@ -206,20 +192,15 @@ export class PgStacInfra extends Stack {
 
     // Configure titiler-pgstac for pgbouncer
     titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
-      pgBouncer.instance,
+      pgstacDb.connectionTarget,
       ec2.Port.tcp(5432),
       "allow connections from titiler",
-    );
-
-    titilerPgstacApi.titilerPgstacLambdaFunction.addEnvironment(
-      "PGBOUNCER_HOST",
-      pgBouncer.endpoint,
     );
 
     // STAC Ingestor
     new BastionHost(this, "bastion-host", {
       vpc,
-      db,
+      db: pgstacDb.db,
       ipv4Allowlist: props.bastionIpv4AllowList,
       userData: ec2.UserData.custom(
         readFileSync(props.bastionUserDataPath, { encoding: "utf-8" }),
@@ -232,8 +213,8 @@ export class PgStacInfra extends Stack {
       stacUrl: stacApiLambda.url,
       dataAccessRole,
       stage,
-      stacDbSecret: pgstacSecret,
-      stacDbSecurityGroup: db.connections.securityGroups[0],
+      stacDbSecret: pgstacDb.pgstacSecret,
+      stacDbSecurityGroup: pgstacDb.db.connections.securityGroups[0],
       subnetSelection: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
