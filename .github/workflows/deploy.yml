@@ -42,7 +42,7 @@ jobs:
       env:
         AUTH_STACK_NAME: ${{ vars.AUTH_STACK_NAME }}
         ROLES_STACK_NAME: ${{ vars.ROLES_STACK_NAME }}
-      run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $AUTH_STACK_NAME $ROLE_STACK_NAME
+      run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $AUTH_STACK_NAME $ROLES_STACK_NAME
 
     - name: Run CDK deploy
       env:
