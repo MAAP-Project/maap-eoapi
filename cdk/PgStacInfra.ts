@@ -22,7 +22,6 @@ import {
 import { DomainName } from "@aws-cdk/aws-apigatewayv2-alpha";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
-import { PgBouncer } from "./PgBouncer";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -36,7 +35,8 @@ export class PgStacInfra extends Stack {
       version,
       dbInstanceType,
       jwksUrl,
-      dataAccessRoleArn,
+      titilerDataAccessRoleArn,
+      ingestorDataAccessRoleArn,
       allocatedStorage,
       mosaicHost,
       titilerBucketsPath,
@@ -57,7 +57,7 @@ export class PgStacInfra extends Stack {
     });
 
     // Pgstac Database
-    const { db, pgstacSecret } = new PgStacDatabase(this, "pgstac-db", {
+    const pgstacDb = new PgStacDatabase(this, "pgstac-db", {
       vpc,
       allowMajorVersionUpgrade: true,
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -70,26 +70,7 @@ export class PgStacInfra extends Stack {
       },
       allocatedStorage: allocatedStorage,
       instanceType: dbInstanceType,
-    });
-
-    // PgBouncer
-    const pgBouncer = new PgBouncer(this, "pgbouncer", {
-      instanceName: `pgbouncer-${stage}`,
-      vpc: props.vpc,
-      database: {
-        instanceType: dbInstanceType,
-        connections: db.connections,
-        secret: pgstacSecret,
-      },
-      usePublicSubnet: props.dbSubnetPublic,
-      pgBouncerConfig: {
-        poolMode: "transaction",
-        maxClientConn: 1000,
-        defaultPoolSize: 20,
-        minPoolSize: 10,
-        reservePoolSize: 5,
-        reservePoolTimeout: 5,
-      },
+      addPgbouncer: true,
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
@@ -106,8 +87,8 @@ export class PgStacInfra extends Stack {
         DESCRIPTION: "STAC API for the MAAP STAC system.",
       },
       vpc,
-      db,
-      dbSecret: pgstacSecret,
+      db: pgstacDb.connectionTarget,
+      dbSecret: pgstacDb.pgstacSecret,
       subnetSelection: apiSubnetSelection,
       stacApiDomainName:
         props.stacApiCustomDomainName && props.certificateArn
@@ -122,16 +103,22 @@ export class PgStacInfra extends Stack {
           : undefined,
     });
 
+    stacApiLambda.stacApiLambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from stac-fastapi-pgstac",
+    );
+
     stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
       sourceArn: props.stacApiIntegrationApiArn,
     });
 
     // titiler-pgstac
-    const dataAccessRole = iam.Role.fromRoleArn(
+    const titilerDataAccessRole = iam.Role.fromRoleArn(
       this,
-      "data-access-role",
-      dataAccessRoleArn,
+      "titiler-data-access-role",
+      titilerDataAccessRoleArn,
     );
 
     const fileContents = readFileSync(titilerBucketsPath, "utf8");
@@ -142,7 +129,7 @@ export class PgStacInfra extends Stack {
         file: "dockerfiles/Dockerfile.raster",
         buildArgs: { PYTHON_VERSION: "3.11" },
       }),
-      role: dataAccessRole,
+      role: titilerDataAccessRole,
     };
 
     const titilerPgstacApi = new TitilerPgstacApiLambda(
@@ -157,8 +144,8 @@ export class PgStacInfra extends Stack {
           MOSAIC_HOST: mosaicHost,
         },
         vpc,
-        db,
-        dbSecret: pgstacSecret,
+        db: pgstacDb.connectionTarget,
+        dbSecret: pgstacDb.pgstacSecret,
         subnetSelection: apiSubnetSelection,
         buckets: buckets,
         titilerPgstacApiDomainName:
@@ -206,20 +193,21 @@ export class PgStacInfra extends Stack {
 
     // Configure titiler-pgstac for pgbouncer
     titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
-      pgBouncer.instance,
+      pgstacDb.connectionTarget,
       ec2.Port.tcp(5432),
       "allow connections from titiler",
     );
 
-    titilerPgstacApi.titilerPgstacLambdaFunction.addEnvironment(
-      "PGBOUNCER_HOST",
-      pgBouncer.endpoint,
+    // STAC Ingestor
+    const ingestorDataAccessRole = iam.Role.fromRoleArn(
+      this,
+      "ingestor-data-access-role",
+      ingestorDataAccessRoleArn,
     );
 
-    // STAC Ingestor
     new BastionHost(this, "bastion-host", {
       vpc,
-      db,
+      db: pgstacDb.db,
       ipv4Allowlist: props.bastionIpv4AllowList,
       userData: ec2.UserData.custom(
         readFileSync(props.bastionUserDataPath, { encoding: "utf-8" }),
@@ -230,10 +218,10 @@ export class PgStacInfra extends Stack {
     new StacIngestor(this, "stac-ingestor", {
       vpc,
       stacUrl: stacApiLambda.url,
-      dataAccessRole,
+      dataAccessRole: ingestorDataAccessRole,
       stage,
-      stacDbSecret: pgstacSecret,
-      stacDbSecurityGroup: db.connections.securityGroups[0],
+      stacDbSecret: pgstacDb.pgstacSecret,
+      stacDbSecurityGroup: pgstacDb.securityGroup!,
       subnetSelection: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
@@ -389,10 +377,14 @@ export interface Props extends StackProps {
   jwksUrl: string;
 
   /**
+   * ARN of IAM role that will be assumed by the titiler Lambda
+   */
+  titilerDataAccessRoleArn: string;
+
+  /**
    * ARN of IAM role that will be assumed by the STAC Ingestor.
    */
-  dataAccessRoleArn: string;
-
+  ingestorDataAccessRoleArn: string;
   /**
    * STAC API api gateway source ARN to be granted STAC API lambda invoke permission.
    */
