@@ -6,7 +6,8 @@ export class Config {
   readonly dbInstanceType: aws_ec2.InstanceType;
   readonly tags: Record<string, string>;
   readonly jwksUrl: string;
-  readonly dataAccessRoleArn: string;
+  readonly titilerDataAccessRoleArn: string;
+  readonly ingestorDataAccessRoleArn: string;
   readonly stacApiIntegrationApiArn: string;
   readonly dbAllocatedStorage: number;
   readonly mosaicHost: string;
@@ -24,7 +25,14 @@ export class Config {
       { name: "STAGE", value: process.env.STAGE },
       { name: "DB_INSTANCE_TYPE", value: process.env.DB_INSTANCE_TYPE },
       { name: "JWKS_URL", value: process.env.JWKS_URL },
-      { name: "DATA_ACCESS_ROLE_ARN", value: process.env.DATA_ACCESS_ROLE_ARN },
+      {
+        name: "TITILER_DATA_ACCESS_ROLE_ARN",
+        value: process.env.TITILER_DATA_ACCESS_ROLE_ARN,
+      },
+      {
+        name: "INGESTOR_DATA_ACCESS_ROLE_ARN",
+        value: process.env.INGESTOR_DATA_ACCESS_ROLE_ARN,
+      },
       {
         name: "STAC_API_INTEGRATION_API_ARN",
         value: process.env.STAC_API_INTEGRATION_API_ARN,
@@ -58,7 +66,8 @@ export class Config {
     this.stage = process.env.STAGE!;
 
     this.jwksUrl = process.env.JWKS_URL!;
-    this.dataAccessRoleArn = process.env.DATA_ACCESS_ROLE_ARN!;
+    this.titilerDataAccessRoleArn = process.env.TITILER_DATA_ACCESS_ROLE_ARN!;
+    this.ingestorDataAccessRoleArn = process.env.INGESTOR_DATA_ACCESS_ROLE_ARN!;
     this.stacApiIntegrationApiArn = process.env.STAC_API_INTEGRATION_API_ARN!;
 
     try {

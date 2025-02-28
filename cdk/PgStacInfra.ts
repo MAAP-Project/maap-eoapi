@@ -35,7 +35,8 @@ export class PgStacInfra extends Stack {
       version,
       dbInstanceType,
       jwksUrl,
-      dataAccessRoleArn,
+      titilerDataAccessRoleArn,
+      ingestorDataAccessRoleArn,
       allocatedStorage,
       mosaicHost,
       titilerBucketsPath,
@@ -114,10 +115,10 @@ export class PgStacInfra extends Stack {
     });
 
     // titiler-pgstac
-    const dataAccessRole = iam.Role.fromRoleArn(
+    const titilerDataAccessRole = iam.Role.fromRoleArn(
       this,
-      "data-access-role",
-      dataAccessRoleArn,
+      "titiler-data-access-role",
+      titilerDataAccessRoleArn,
     );
 
     const fileContents = readFileSync(titilerBucketsPath, "utf8");
@@ -128,7 +129,7 @@ export class PgStacInfra extends Stack {
         file: "dockerfiles/Dockerfile.raster",
         buildArgs: { PYTHON_VERSION: "3.11" },
       }),
-      role: dataAccessRole,
+      role: titilerDataAccessRole,
     };
 
     const titilerPgstacApi = new TitilerPgstacApiLambda(
@@ -198,6 +199,12 @@ export class PgStacInfra extends Stack {
     );
 
     // STAC Ingestor
+    const ingestorDataAccessRole = iam.Role.fromRoleArn(
+      this,
+      "ingestor-data-access-role",
+      ingestorDataAccessRoleArn,
+    );
+
     new BastionHost(this, "bastion-host", {
       vpc,
       db: pgstacDb.db,
@@ -211,7 +218,7 @@ export class PgStacInfra extends Stack {
     new StacIngestor(this, "stac-ingestor", {
       vpc,
       stacUrl: stacApiLambda.url,
-      dataAccessRole,
+      dataAccessRole: ingestorDataAccessRole,
       stage,
       stacDbSecret: pgstacDb.pgstacSecret,
       stacDbSecurityGroup: pgstacDb.securityGroup!,
@@ -370,10 +377,14 @@ export interface Props extends StackProps {
   jwksUrl: string;
 
   /**
+   * ARN of IAM role that will be assumed by the titiler Lambda
+   */
+  titilerDataAccessRoleArn: string;
+
+  /**
    * ARN of IAM role that will be assumed by the STAC Ingestor.
    */
-  dataAccessRoleArn: string;
-
+  ingestorDataAccessRoleArn: string;
   /**
    * STAC API api gateway source ARN to be granted STAC API lambda invoke permission.
    */
