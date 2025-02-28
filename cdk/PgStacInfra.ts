@@ -128,6 +128,12 @@ export class PgStacInfra extends Stack {
     });
 
     // titiler-pgstac
+    const dataAccessRole = iam.Role.fromRoleArn(
+      this,
+      "data-access-role",
+      dataAccessRoleArn,
+    );
+
     const fileContents = readFileSync(titilerBucketsPath, "utf8");
     const buckets = load(fileContents) as string[];
 
@@ -136,6 +142,7 @@ export class PgStacInfra extends Stack {
         file: "dockerfiles/Dockerfile.raster",
         buildArgs: { PYTHON_VERSION: "3.11" },
       }),
+      role: dataAccessRole,
     };
 
     const titilerPgstacApi = new TitilerPgstacApiLambda(
@@ -171,6 +178,7 @@ export class PgStacInfra extends Stack {
 
     // Add dynamodb permissions to the titiler-pgstac Lambda for mosaicjson support
     const tableName = mosaicHost.split("/", 2)[1];
+
     const mosaicPerms = [
       new iam.PolicyStatement({
         actions: ["dynamodb:CreateTable", "dynamodb:DescribeTable"],
@@ -218,12 +226,6 @@ export class PgStacInfra extends Stack {
       ),
       createElasticIp: props.bastionHostCreateElasticIp,
     });
-
-    const dataAccessRole = iam.Role.fromRoleArn(
-      this,
-      "data-access-role",
-      dataAccessRoleArn,
-    );
 
     new StacIngestor(this, "stac-ingestor", {
       vpc,

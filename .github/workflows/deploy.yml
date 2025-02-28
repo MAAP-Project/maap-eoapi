@@ -41,28 +41,27 @@ jobs:
       id: import-stacks-vars-to-output
       env:
         AUTH_STACK_NAME: ${{ vars.AUTH_STACK_NAME }}
-        ROLE_STACK_NAME: ${{ vars.ROLES_STACK_NAME}}
       run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $AUTH_STACK_NAME $ROLE_STACK_NAME
 
     - name: Run CDK deploy
       env:
-        STAGE: "${{ github.event.inputs.deployment_environment }}"
-        STAC_API_INTEGRATION_API_ARN: ${{ vars.STAC_API_INTEGRATION_API_ARN }}
-        JWKS_URL: ${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}
-        DATA_ACCESS_ROLE_ARN: ${{ steps.import-stacks-vars-to-output.outputs.DATA_ACCESS_ROLE_ARN }}
+        AUTHOR: ${{ github.actor }}
+        CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
+        COMMIT_SHA: ${{ github.sha }}
+        DATA_ACCESS_ROLE_ARN: ${{ vars.DATA_ACCESS_ROLE_ARN }}
         DB_ALLOCATED_STORAGE: ${{ vars.DB_ALLOCATED_STORAGE }}
         DB_INSTANCE_TYPE: ${{ vars.DB_INSTANCE_TYPE }}
         GIT_REPOSITORY: ${{ github.repository}}
-        COMMIT_SHA: ${{ github.sha }}
-        AUTHOR: ${{ github.actor }}
-        CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
         INGESTOR_DOMAIN_NAME: ${{ vars.INGESTOR_DOMAIN_NAME }}
-        TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
-        STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_API_CUSTOM_DOMAIN_NAME}}
+        JWKS_URL: ${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}
         MOSAIC_HOST: ${{ vars.MOSAIC_HOST }}
-        STAC_BROWSER_REPO_TAG: ${{ vars.STAC_BROWSER_REPO_TAG }}
-        STAC_BROWSER_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_BROWSER_CUSTOM_DOMAIN_NAME }}
+        STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_API_CUSTOM_DOMAIN_NAME}}
+        STAC_API_INTEGRATION_API_ARN: ${{ vars.STAC_API_INTEGRATION_API_ARN }}
         STAC_BROWSER_CERTIFICATE_ARN: ${{ vars.STAC_BROWSER_CERTIFICATE_ARN }}
+        STAC_BROWSER_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_BROWSER_CUSTOM_DOMAIN_NAME }}
+        STAC_BROWSER_REPO_TAG: ${{ vars.STAC_BROWSER_REPO_TAG }}
+        STAGE: "${{ github.event.inputs.deployment_environment }}"
+        TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
       run: |
         npm install -g aws-cdk
         cdk deploy --all --require-approval never
