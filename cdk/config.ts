@@ -18,6 +18,7 @@ export class Config {
   readonly stacBrowserRepoTag: string;
   readonly stacBrowserCustomDomainName: string;
   readonly stacBrowserCertificateArn: string;
+  readonly pgstacVersion: string;
 
   constructor() {
     // These are required environment variables and cannot be undefined
@@ -54,6 +55,10 @@ export class Config {
       {
         name: "STAC_API_CUSTOM_DOMAIN_NAME",
         value: process.env.STAC_API_CUSTOM_DOMAIN_NAME,
+      },
+      {
+        name: "PGSTAC_VERSION",
+        value: process.env.PGSTAC_VERSION,
       },
     ];
 
@@ -102,6 +107,7 @@ export class Config {
     this.ingestorDomainName = process.env.INGESTOR_DOMAIN_NAME;
     this.titilerPgStacApiCustomDomainName =
       process.env.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
+    this.pgstacVersion = process.env.PGSTAC_VERSION!;
   }
 
   /**

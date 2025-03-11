@@ -56,6 +56,7 @@ jobs:
         INGESTOR_DOMAIN_NAME: ${{ vars.INGESTOR_DOMAIN_NAME }}
         JWKS_URL: ${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}
         MOSAIC_HOST: ${{ vars.MOSAIC_HOST }}
+        PGSTAC_VERSION: ${{ vars.PGSTAC_VERSION }}
         STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_API_CUSTOM_DOMAIN_NAME}}
         STAC_API_INTEGRATION_API_ARN: ${{ vars.STAC_API_INTEGRATION_API_ARN }}
         STAC_BROWSER_CERTIFICATE_ARN: ${{ vars.STAC_BROWSER_CERTIFICATE_ARN }}

@@ -40,6 +40,7 @@ export class PgStacInfra extends Stack {
       allocatedStorage,
       mosaicHost,
       titilerBucketsPath,
+      pgstacVersion,
     } = props;
 
     const maapLoggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
@@ -71,6 +72,7 @@ export class PgStacInfra extends Stack {
       allocatedStorage: allocatedStorage,
       instanceType: dbInstanceType,
       addPgbouncer: true,
+      pgstacVersion: pgstacVersion,
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
@@ -446,4 +448,9 @@ export interface Props extends StackProps {
    * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
    */
   stacBrowserCertificateArn: string;
+
+  /**
+   * version of pgstac to install on the database
+   */
+  pgstacVersion: string;
 }
