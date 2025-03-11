@@ -231,6 +231,7 @@ export class PgStacInfra extends Stack {
         JWKS_URL: jwksUrl,
         REQUESTER_PAYS: "true",
       },
+      pgstacVersion,
       ingestorDomainNameOptions:
         props.IngestorDomainName && props.certificateArn
           ? {
