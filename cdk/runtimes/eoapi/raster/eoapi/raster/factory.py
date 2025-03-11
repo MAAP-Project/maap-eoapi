@@ -5,13 +5,13 @@ import logging
 import os
 import uuid
 from asyncio import wait_for
-from dataclasses import dataclass
 from functools import partial
 from typing import Annotated, Dict, List, Optional
 from urllib.parse import urlencode
 
 import morecantile
 import rasterio
+from attrs import define
 from cogeo_mosaic.backends import DynamoDBBackend
 from cogeo_mosaic.errors import MosaicError
 from cogeo_mosaic.mosaic import MosaicJSON
@@ -44,12 +44,11 @@ from eoapi.raster.settings import MosaicSettings
 mosaic_config = MosaicSettings()
 
 
-@dataclass
+@define(kw_only=True)
 class MosaicTilerFactory(factory.MosaicTilerFactory):
     """Custom MosaicTiler Factory."""
 
     logger = logging.getLogger(__name__)
-    tms = morecantile.tms.get("WebMercatorQuad")
 
     def register_routes(self):  # noqa
         """This Method register routes to the router."""
