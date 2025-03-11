@@ -298,26 +298,29 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 ImageType,
                 "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
             ] = None,
+            backend_params=Depends(self.backend_dependency),
+            reader_params=Depends(self.reader_dependency),
             layer_params=Depends(self.layer_dependency),
             dataset_params=Depends(self.dataset_dependency),
             pixel_selection=Depends(self.pixel_selection_dependency),
+            tile_params=Depends(self.tile_dependency),
             post_process=Depends(self.process_dependency),
             colormap=Depends(self.colormap_dependency),
             render_params=Depends(self.render_dependency),
-            backend_params=Depends(self.backend_dependency),
-            reader_params=Depends(self.reader_dependency),
             env=Depends(self.environment_dependency),
         ):
             """Create map tile from a mosaic."""
             threads = int(os.getenv("MOSAIC_CONCURRENCY", MAX_THREADS))
 
             mosaic_uri = mk_src_path(mosaic_id)
+            tms = self.supported_tms.get("WebMercatorQuad")
             with rasterio.Env(**env):
                 with self.backend(
                     mosaic_uri,
+                    tms=tms,
                     reader=self.dataset_reader,
-                    reader_options={**reader_params},
-                    **backend_params,
+                    reader_options=reader_params.as_dict(),
+                    **backend_params.as_dict(),
                 ) as src_dst:
                     image, assets = src_dst.tile(
                         x,
@@ -326,8 +329,9 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                         pixel_selection=pixel_selection,
                         tilesize=scale * 256,
                         threads=threads,
-                        **layer_params,
-                        **dataset_params,
+                        **tile_params.as_dict(),
+                        **layer_params.as_dict(),
+                        **dataset_params.as_dict(),
                     )
 
             if post_process:
@@ -412,8 +416,8 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 with self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
-                    reader_options={**reader_params},
-                    **backend_params,
+                    reader_options=reader_params.to_dict(),
+                    **backend_params.to_dict(),
                 ) as src_dst:
                     bounds = src_dst.bounds
                     minzoom = minzoom if minzoom is not None else src_dst.minzoom
@@ -477,15 +481,15 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 with self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
-                    reader_options={**reader_params},
-                    **backend_params,
+                    reader_options=reader_params.to_dict(),
+                    **backend_params.to_dict(),
                 ) as src_dst:
                     values = src_dst.point(
                         lon,
                         lat,
                         threads=threads,
-                        **layer_params,
-                        **dataset_params,
+                        **layer_params.to_dict(),
+                        **dataset_params.to_dict(),
                     )
 
             return {
