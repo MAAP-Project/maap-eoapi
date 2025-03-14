@@ -5,18 +5,18 @@ import logging
 import os
 import uuid
 from asyncio import wait_for
-from dataclasses import dataclass
 from functools import partial
 from typing import Annotated, Dict, List, Optional
 from urllib.parse import urlencode
 
 import morecantile
-from pydantic import Field
 import rasterio
+from attrs import define
 from cogeo_mosaic.backends import DynamoDBBackend
 from cogeo_mosaic.errors import MosaicError
 from cogeo_mosaic.mosaic import MosaicJSON
 from fastapi import Depends, Header, HTTPException, Path, Query
+from pydantic import Field
 from pystac_client import Client
 from rio_tiler.constants import MAX_THREADS
 from rio_tiler.io import Reader
@@ -44,7 +44,7 @@ from eoapi.raster.settings import MosaicSettings
 mosaic_config = MosaicSettings()
 
 
-@dataclass
+@define(kw_only=True)
 class MosaicTilerFactory(factory.MosaicTilerFactory):
     """Custom MosaicTiler Factory."""
 
@@ -218,12 +218,6 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             dataset_params=Depends(self.dataset_dependency),  # noqa
             pixel_selection=Depends(self.pixel_selection_dependency),  # noqa
             post_process=Depends(self.process_dependency),  # noqa
-            rescale=Depends(self.rescale_dependency),  # noqa
-            color_formula: Optional[str] = Query(  # noqa
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
             colormap=Depends(self.colormap_dependency),  # noqa
             render_params=Depends(self.render_dependency),  # noqa
             backend_params=Depends(self.backend_dependency),  # noqa
@@ -304,32 +298,29 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 ImageType,
                 "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
             ] = None,
+            backend_params=Depends(self.backend_dependency),
+            reader_params=Depends(self.reader_dependency),
             layer_params=Depends(self.layer_dependency),
             dataset_params=Depends(self.dataset_dependency),
             pixel_selection=Depends(self.pixel_selection_dependency),
+            tile_params=Depends(self.tile_dependency),
             post_process=Depends(self.process_dependency),
-            rescale=Depends(self.rescale_dependency),
-            color_formula: Optional[str] = Query(
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
             colormap=Depends(self.colormap_dependency),
             render_params=Depends(self.render_dependency),
-            backend_params=Depends(self.backend_dependency),
-            reader_params=Depends(self.reader_dependency),
             env=Depends(self.environment_dependency),
         ):
             """Create map tile from a mosaic."""
             threads = int(os.getenv("MOSAIC_CONCURRENCY", MAX_THREADS))
 
             mosaic_uri = mk_src_path(mosaic_id)
+            tms = self.supported_tms.get("WebMercatorQuad")
             with rasterio.Env(**env):
-                with self.reader(
+                with self.backend(
                     mosaic_uri,
+                    tms=tms,
                     reader=self.dataset_reader,
-                    reader_options={**reader_params},
-                    **backend_params,
+                    reader_options=reader_params.as_dict(),
+                    **backend_params.as_dict(),
                 ) as src_dst:
                     image, assets = src_dst.tile(
                         x,
@@ -338,36 +329,26 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                         pixel_selection=pixel_selection,
                         tilesize=scale * 256,
                         threads=threads,
-                        **layer_params,
-                        **dataset_params,
+                        **tile_params.as_dict(),
+                        **layer_params.as_dict(),
+                        **dataset_params.as_dict(),
                     )
 
             if post_process:
                 image = post_process(image)
 
-            if rescale:
-                image.rescale(rescale)
-
-            if color_formula:
-                image.apply_color_formula(color_formula)
-
-            if colormap:
-                image = image.apply_colormap(colormap)
-
-            if not format:
-                format = ImageType.jpeg if image.mask.all() else ImageType.png
-
-            content = image.render(
-                img_format=format.driver,
-                **format.profile,
-                **render_params,
+            content, media_type = self.render_func(
+                image,
+                output_format=format,
+                colormap=colormap,
+                **render_params.as_dict(),
             )
 
             headers: Dict[str, str] = {}
             if OptionalHeader.x_assets in self.optional_headers:
                 headers["X-Assets"] = ",".join(assets)
 
-            return Response(content, media_type=format.mediatype, headers=headers)
+            return Response(content, media_type=media_type, headers=headers)
 
         @self.router.get(
             "/mosaics/{mosaic_id}/WMTSCapabilities.xml", response_class=XMLResponse
@@ -397,12 +378,6 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 description="Buffer on each side of the given tile. It must be a multiple of `0.5`. Output **tilesize** will be expanded to `tilesize + 2 * tile_buffer` (e.g 0.5 = 257x257, 1.0 = 258x258).",
             ),
             post_process=Depends(self.process_dependency),  # noqa
-            rescale=Depends(self.rescale_dependency),  # noqa
-            color_formula: Optional[str] = Query(  # noqa
-                None,
-                title="Color Formula",
-                description="rio-color formula (info: https://github.com/mapbox/rio-color)",
-            ),
             colormap=Depends(self.colormap_dependency),  # noqa
             render_params=Depends(self.render_dependency),  # noqa
             backend_params=Depends(self.backend_dependency),
@@ -438,11 +413,11 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
 
             mosaic_uri = mk_src_path(mosaic_id)
             with rasterio.Env(**env):
-                with self.reader(
+                with self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
-                    reader_options={**reader_params},
-                    **backend_params,
+                    reader_options=reader_params.to_dict(),
+                    **backend_params.to_dict(),
                 ) as src_dst:
                     bounds = src_dst.bounds
                     minzoom = minzoom if minzoom is not None else src_dst.minzoom
@@ -503,18 +478,18 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
 
             mosaic_uri = mk_src_path(mosaic_id)
             with rasterio.Env(**env):
-                with self.reader(
+                with self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
-                    reader_options={**reader_params},
-                    **backend_params,
+                    reader_options=reader_params.to_dict(),
+                    **backend_params.to_dict(),
                 ) as src_dst:
                     values = src_dst.point(
                         lon,
                         lat,
                         threads=threads,
-                        **layer_params,
-                        **dataset_params,
+                        **layer_params.to_dict(),
+                        **dataset_params.to_dict(),
                     )
 
             return {
@@ -563,7 +538,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             mosaicjson: MosaicJSON,
             overwrite: bool,
         ) -> None:
-            with self.reader(mosaic_uri, mosaic_def=mosaicjson) as mosaic:
+            with self.backend(mosaic_uri, mosaic_def=mosaicjson) as mosaic:
                 mosaic.write(overwrite=overwrite)
 
         async def retrieve(
@@ -590,7 +565,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 return None
 
         def read_mosaicjson_sync(mosaic_uri: str, include_tiles: bool) -> MosaicJSON:
-            with self.reader(
+            with self.backend(
                 mosaic_uri,
                 reader=self.dataset_reader,
                 # TODO
@@ -623,7 +598,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             return
 
         def delete_mosaicjson_sync(mosaic_uri: str) -> None:
-            with self.reader(
+            with self.backend(
                 mosaic_uri,
                 reader=self.dataset_reader,
                 # TODO
