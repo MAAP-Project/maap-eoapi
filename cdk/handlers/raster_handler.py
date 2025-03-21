@@ -55,19 +55,19 @@ async def log_request_data(request: Request, call_next):
     query_params = dict(request.query_params)
 
     # Extract path parameters
-    path_template = path
+    route = path
     path_params = {}
 
-    for pattern, template in app.state.path_templates.items():
+    for pattern, _route in app.state.path_templates.items():
         match = pattern.match(path)
         if match:
-            path_template = template
+            route = _route
             path_params = match.groupdict()
             break
 
     log_data = {
         "method": method,
-        "path_template": path_template,
+        "route": route,
         "path": path,
         "path_params": path_params,
         "query_params": query_params,

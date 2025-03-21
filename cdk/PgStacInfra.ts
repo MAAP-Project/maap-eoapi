@@ -219,8 +219,8 @@ export class PgStacInfra extends Stack {
       queryLines: [
         "fields @timestamp, @message",
         'filter @message like "Request:"',
-        'parse @message \'"path_template": "*",\' as path_template',
-        "stats count(*) as count by path_template",
+        'parse @message \'"route": "*",\' as route',
+        "stats count(*) as count by route",
         "sort count desc",
         "limit 20",
       ],
