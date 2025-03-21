@@ -7,6 +7,7 @@ import {
   aws_s3 as s3,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
+  aws_cloudwatch as cloudwatch,
 } from "aws-cdk-lib";
 import { Aws, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
@@ -199,6 +200,57 @@ export class PgStacInfra extends Stack {
       ec2.Port.tcp(5432),
       "allow connections from titiler",
     );
+
+    // titiler logging dashboard
+
+    const titilerDashboard = new cloudwatch.Dashboard(
+      this,
+      "TitilerDashboard",
+      {
+        dashboardName: `titiler-${stage}`,
+      },
+    );
+
+    // widget showing count by application route
+    const titilerLogWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "Titiler Lambda Logs",
+      width: 24,
+      height: 6,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"path_template": "*",\' as path_template',
+        "stats count(*) as count by path_template",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+
+    // widget showing count by scheme/netloc for routes with url parameter
+    const schemeNetlocAnalysisWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "URL Pattern Analysis (Scheme + Domain)",
+      width: 24,
+      height: 8,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"url_scheme":"*"\' as url_scheme',
+        'parse @message \'"url_netloc":"*"\' as url_netloc',
+        "filter ispresent(url_scheme)",
+        "stats count(*) as count by url_scheme, url_netloc",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+    titilerDashboard.addWidgets(titilerLogWidget, schemeNetlocAnalysisWidget);
 
     // STAC Ingestor
     const ingestorDataAccessRole = iam.Role.fromRoleArn(
