@@ -41,24 +41,10 @@ async def startup_event() -> None:
     app.state.path_templates = {}
     for route in app.routes:
         if isinstance(route, APIRoute):
-            # Extract original parameter names
-            original_params = re.findall(r"{([^}]+)}", route.path)
-
-            # Create pattern with sanitized parameter names
-            pattern = route.path
-            for param in original_params:
-                # Replace special chars with underscore for the regex group name
-                safe_name = re.sub(r"[^0-9a-zA-Z_]", "_", param)
-                # Replace the param in the pattern
-                pattern = pattern.replace(f"{{{param}}}", f"(?P<{safe_name}>[^/]+)")
-
-            # Store the mapping of regex pattern to original route path
-            app.state.path_templates[re.compile(f"^{pattern}$")] = {
-                "template": route.path,
-                "param_mapping": {
-                    re.sub(r"[^0-9a-zA-Z_]", "_", p): p for p in original_params
-                },
-            }
+            # replace : with _ to make it regexable
+            route_path = route.path.replace(":", "__")
+            pattern = re.sub(r"{([^}]+)}", r"(?P<\1>[^/]+)", route_path)
+            app.state.path_templates[re.compile(f"^{pattern}$")] = route_path
 
 
 @app.middleware("http")
@@ -71,18 +57,14 @@ async def log_request_data(request: Request, call_next):
     path_template = path
     path_params = {}
 
-    for pattern, route_info in app.state.path_templates.items():
+    for pattern, template in app.state.path_templates.items():
         match = pattern.match(path)
         if match:
-            path_template = route_info["template"]
-            # Get regex-captured params
-            captured_params = match.groupdict()
-            # Map back to original parameter names
-            for safe_name, value in captured_params.items():
-                original_name = route_info["param_mapping"].get(safe_name, safe_name)
-                path_params[original_name] = value
+            path_template = template
+            path_params = match.groupdict()
             break
 
+    # Build log data
     log_data = {
         "method": method,
         "path_template": path_template,
