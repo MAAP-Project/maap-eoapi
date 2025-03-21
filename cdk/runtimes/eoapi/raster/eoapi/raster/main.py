@@ -2,8 +2,6 @@
 Handler for AWS Lambda.
 """
 
-import logging
-
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from rio_tiler.io import STACReader
@@ -16,23 +14,6 @@ from titiler.extensions import (
 from titiler.pgstac.main import app  # noqa: E402
 
 from eoapi.raster.factory import MosaicTilerFactory
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-
-@app.middleware("http")
-async def log_request_params(request: Request, call_next):
-    """Log request details"""
-    query_params = dict(request.query_params)
-    path = request.url.path
-    method = request.method
-
-    logger.info(f"Request: {method} {path} - Query parameters: {query_params}")
-
-    response = await call_next(request)
-    return response
-
 
 ########################################
 # Include the /cog router
