@@ -15,7 +15,6 @@ from titiler.pgstac.main import app  # noqa: E402
 
 from eoapi.raster.factory import MosaicTilerFactory
 
-
 ########################################
 # Include the /cog router
 ########################################
