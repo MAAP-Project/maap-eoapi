@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+from urllib.parse import urlparse
 
 from eoapi.raster.main import app
 from eoapi.raster.utils import get_secret_dict
@@ -64,14 +65,20 @@ async def log_request_data(request: Request, call_next):
             path_params = match.groupdict()
             break
 
-    # Build log data
     log_data = {
         "method": method,
         "path_template": path_template,
         "path": path,
         "path_params": path_params,
         "query_params": query_params,
+        "url_scheme": None,
+        "url_netloc": None,
     }
+
+    if url := query_params.get("url"):
+        url_parsed = urlparse(url)
+        log_data["url_scheme"] = url_parsed.scheme
+        log_data["url_netloc"] = url_parsed.netloc
 
     logger.info(f"Request: {json.dumps(log_data)}")
 
