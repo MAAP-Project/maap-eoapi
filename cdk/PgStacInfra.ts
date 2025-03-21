@@ -201,22 +201,18 @@ export class PgStacInfra extends Stack {
       "allow connections from titiler",
     );
 
-    // titiler logging dashboard
+    // API logging dashboard
 
-    const titilerDashboard = new cloudwatch.Dashboard(
-      this,
-      "TitilerDashboard",
-      {
-        dashboardName: `titiler-${stage}`,
-      },
-    );
+    const eoapiDashboard = new cloudwatch.Dashboard(this, "eoAPIDashboard", {
+      dashboardName: `eoAPI-${stage}`,
+    });
 
     // widget showing count by application route
     const titilerLogWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
         titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
       ],
-      title: "Titiler Lambda Logs",
+      title: "titiler requests by route",
       width: 24,
       height: 6,
       view: cloudwatch.LogQueryVisualizationType.TABLE,
@@ -231,26 +227,26 @@ export class PgStacInfra extends Stack {
     });
 
     // widget showing count by scheme/netloc for routes with url parameter
-    const schemeNetlocAnalysisWidget = new cloudwatch.LogQueryWidget({
+    const titilerUrlAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
         titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
       ],
-      title: "URL Pattern Analysis (Scheme + Domain)",
+      title: "titiler /cog requests by url scheme and netloc",
       width: 24,
       height: 8,
       view: cloudwatch.LogQueryVisualizationType.TABLE,
       queryLines: [
         "fields @timestamp, @message",
         'filter @message like "Request:"',
-        'parse @message \'"url_scheme":"*"\' as url_scheme',
-        'parse @message \'"url_netloc":"*"\' as url_netloc',
+        'parse @message \'"url_scheme": "*"\' as url_scheme',
+        'parse @message \'"url_netloc": "*"\' as url_netloc',
         "filter ispresent(url_scheme)",
         "stats count(*) as count by url_scheme, url_netloc",
         "sort count desc",
         "limit 20",
       ],
     });
-    titilerDashboard.addWidgets(titilerLogWidget, schemeNetlocAnalysisWidget);
+    eoapiDashboard.addWidgets(titilerLogWidget, titilerUrlAnalysisWidget);
 
     // STAC Ingestor
     const ingestorDataAccessRole = iam.Role.fromRoleArn(
