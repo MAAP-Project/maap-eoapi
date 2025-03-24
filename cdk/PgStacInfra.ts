@@ -226,6 +226,25 @@ export class PgStacInfra extends Stack {
       ],
     });
 
+    // widget showing count by referer
+    const titilerRefererAnalysisWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "titiler /cog requests by url scheme and netloc",
+      width: 6,
+      height: 8,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"referer": "*"\' as referer',
+        "stats count(*) as count by referer",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+
     // widget showing count by scheme/netloc for routes with url parameter
     const titilerUrlAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
@@ -293,6 +312,7 @@ export class PgStacInfra extends Stack {
       titilerCollectionAnalysisWidget,
       titilerSearchesAnalysisWidget,
       titilerUrlAnalysisWidget,
+      titilerRefererAnalysisWidget,
     );
 
     // STAC Ingestor
