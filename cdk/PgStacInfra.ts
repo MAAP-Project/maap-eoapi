@@ -231,7 +231,7 @@ export class PgStacInfra extends Stack {
       logGroupNames: [
         titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
       ],
-      title: "titiler /cog requests by url scheme and netloc",
+      title: "titiler requests by request referer",
       width: 6,
       height: 8,
       view: cloudwatch.LogQueryVisualizationType.TABLE,
