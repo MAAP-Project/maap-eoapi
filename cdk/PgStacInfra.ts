@@ -7,6 +7,7 @@ import {
   aws_s3 as s3,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
+  aws_cloudwatch as cloudwatch,
 } from "aws-cdk-lib";
 import { Aws, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
@@ -199,6 +200,53 @@ export class PgStacInfra extends Stack {
       ec2.Port.tcp(5432),
       "allow connections from titiler",
     );
+
+    // API logging dashboard
+
+    const eoapiDashboard = new cloudwatch.Dashboard(this, "eoAPIDashboard", {
+      dashboardName: `eoAPI-${stage}`,
+    });
+
+    // widget showing count by application route
+    const titilerLogWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "titiler requests by route",
+      width: 24,
+      height: 6,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"route": "*",\' as route',
+        "stats count(*) as count by route",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+
+    // widget showing count by scheme/netloc for routes with url parameter
+    const titilerUrlAnalysisWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "titiler /cog requests by url scheme and netloc",
+      width: 24,
+      height: 8,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"url_scheme": "*"\' as url_scheme',
+        'parse @message \'"url_netloc": "*"\' as url_netloc',
+        "filter ispresent(url_scheme)",
+        "stats count(*) as count by url_scheme, url_netloc",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+    eoapiDashboard.addWidgets(titilerLogWidget, titilerUrlAnalysisWidget);
 
     // STAC Ingestor
     const ingestorDataAccessRole = iam.Role.fromRoleArn(
