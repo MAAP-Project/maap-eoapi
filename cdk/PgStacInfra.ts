@@ -208,13 +208,13 @@ export class PgStacInfra extends Stack {
     });
 
     // widget showing count by application route
-    const titilerLogWidget = new cloudwatch.LogQueryWidget({
+    const titilerRouteLogWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
         titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler requests by route",
-      width: 24,
-      height: 6,
+      width: 12,
+      height: 8,
       view: cloudwatch.LogQueryVisualizationType.TABLE,
       queryLines: [
         "fields @timestamp, @message",
@@ -226,13 +226,32 @@ export class PgStacInfra extends Stack {
       ],
     });
 
+    // widget showing count by referer
+    const titilerRefererAnalysisWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "titiler requests by request referer",
+      width: 6,
+      height: 8,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"referer": "*"\' as referer',
+        "stats count(*) as count by referer",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+
     // widget showing count by scheme/netloc for routes with url parameter
     const titilerUrlAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
         titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler /cog requests by url scheme and netloc",
-      width: 24,
+      width: 6,
       height: 8,
       view: cloudwatch.LogQueryVisualizationType.TABLE,
       queryLines: [
@@ -246,7 +265,55 @@ export class PgStacInfra extends Stack {
         "limit 20",
       ],
     });
-    eoapiDashboard.addWidgets(titilerLogWidget, titilerUrlAnalysisWidget);
+
+    // widget showing count by collection_id for /collections requests
+    const titilerCollectionAnalysisWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "titiler /collections requests by collection id",
+      width: 6,
+      height: 8,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"route": "*"\' as route',
+        'filter route like "/collections/"',
+        "parse @message '\"path_params\": {*}' as path_params",
+        "stats count(*) as count by path_params.collection_id as collection_id",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+
+    // widget showing count by collection_id for /collections requests
+    const titilerSearchesAnalysisWidget = new cloudwatch.LogQueryWidget({
+      logGroupNames: [
+        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+      ],
+      title: "titiler /searches requests by search id",
+      width: 6,
+      height: 8,
+      view: cloudwatch.LogQueryVisualizationType.TABLE,
+      queryLines: [
+        "fields @timestamp, @message",
+        'filter @message like "Request:"',
+        'parse @message \'"route": "*"\' as route',
+        'filter route like "/searches/"',
+        "parse @message '\"path_params\": {*}' as path_params",
+        "stats count(*) as count by path_params.search_id as search_id",
+        "sort count desc",
+        "limit 20",
+      ],
+    });
+    eoapiDashboard.addWidgets(
+      titilerRouteLogWidget,
+      titilerCollectionAnalysisWidget,
+      titilerSearchesAnalysisWidget,
+      titilerUrlAnalysisWidget,
+      titilerRefererAnalysisWidget,
+    );
 
     // STAC Ingestor
     const ingestorDataAccessRole = iam.Role.fromRoleArn(

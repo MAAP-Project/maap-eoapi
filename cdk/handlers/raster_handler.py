@@ -54,8 +54,15 @@ async def log_request_data(request: Request, call_next):
     method = request.method
     query_params = dict(request.query_params)
 
-    # Extract path parameters
+    referer = request.headers.get("referer") or request.headers.get("referrer")
+    origin = request.headers.get("origin")
+
+    # find generic route path, fall back to actual route path if no match found
     route = path
+
+    # re-map /mosaic requests to new /searches/
+    route = route.replace("/mosaic/", "/searches/")
+
     path_params = {}
 
     for pattern, _route in app.state.path_templates.items():
@@ -67,6 +74,8 @@ async def log_request_data(request: Request, call_next):
 
     log_data = {
         "method": method,
+        "referer": referer,
+        "origin": origin,
         "route": route,
         "path": path,
         "path_params": path_params,
