@@ -66,7 +66,7 @@ async def log_request_data(request: Request, call_next):
     path_params = {}
 
     for pattern, _route in app.state.path_templates.items():
-        match = pattern.match(path)
+        match = pattern.match(route)
         if match:
             route = _route
             path_params = match.groupdict()
