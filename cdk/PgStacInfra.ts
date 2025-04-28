@@ -1,4 +1,5 @@
 import {
+  aws_apigatewayv2 as apigatewayv2,
   aws_certificatemanager as acm,
   aws_iam as iam,
   aws_ec2 as ec2,
@@ -20,7 +21,6 @@ import {
   TitilerPgstacApiLambda,
   StacBrowser,
 } from "eoapi-cdk";
-import { DomainName } from "@aws-cdk/aws-apigatewayv2-alpha";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
 
@@ -95,7 +95,7 @@ export class PgStacInfra extends Stack {
       subnetSelection: apiSubnetSelection,
       stacApiDomainName:
         props.stacApiCustomDomainName && props.certificateArn
-          ? new DomainName(this, "stac-api-domain-name", {
+          ? new apigatewayv2.DomainName(this, "stac-api-domain-name", {
               domainName: props.stacApiCustomDomainName,
               certificate: acm.Certificate.fromCertificateArn(
                 this,
@@ -153,14 +153,18 @@ export class PgStacInfra extends Stack {
         buckets: buckets,
         titilerPgstacApiDomainName:
           props.titilerPgStacApiCustomDomainName && props.certificateArn
-            ? new DomainName(this, "titiler-pgstac-api-domain-name", {
-                domainName: props.titilerPgStacApiCustomDomainName,
-                certificate: acm.Certificate.fromCertificateArn(
-                  this,
-                  "titilerPgStacCustomDomainNameCertificate",
-                  props.certificateArn,
-                ),
-              })
+            ? new apigatewayv2.DomainName(
+                this,
+                "titiler-pgstac-api-domain-name",
+                {
+                  domainName: props.titilerPgStacApiCustomDomainName,
+                  certificate: acm.Certificate.fromCertificateArn(
+                    this,
+                    "titilerPgStacCustomDomainNameCertificate",
+                    props.certificateArn,
+                  ),
+                },
+              )
             : undefined,
         lambdaFunctionOptions: titilerPgstacLambdaOptions,
       },
