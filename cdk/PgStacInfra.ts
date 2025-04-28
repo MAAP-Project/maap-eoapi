@@ -23,6 +23,7 @@ import {
 } from "eoapi-cdk";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
+import { Bucket } from "aws-cdk-lib/aws-s3";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -34,29 +35,13 @@ export class PgStacInfra extends Stack {
       vpc,
       stage,
       version,
-      dbInstanceType,
-      jwksUrl,
-      titilerDataAccessRoleArn,
-      ingestorDataAccessRoleArn,
-      allocatedStorage,
-      mosaicHost,
-      titilerBucketsPath,
-      pgstacVersion,
+      certificateArn,
+      pgstacDbConfig,
+      titilerPgstacConfig,
+      stacApiConfig,
+      stacBrowserConfig,
+      ingestorConfig,
     } = props;
-
-    const maapLoggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
-      accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-      removalPolicy: RemovalPolicy.DESTROY,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      bucketName: `maap-logging-${stage}`,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          enabled: true,
-          expiration: Duration.days(90),
-        },
-      ],
-    });
 
     // Pgstac Database
     const pgstacDb = new PgStacDatabase(this, "pgstac-db", {
@@ -66,18 +51,18 @@ export class PgStacInfra extends Stack {
         version: rds.PostgresEngineVersion.VER_14,
       }),
       vpcSubnets: {
-        subnetType: props.dbSubnetPublic
+        subnetType: pgstacDbConfig.subnetPublic
           ? ec2.SubnetType.PUBLIC
           : ec2.SubnetType.PRIVATE_ISOLATED,
       },
-      allocatedStorage: allocatedStorage,
-      instanceType: dbInstanceType,
+      allocatedStorage: pgstacDbConfig.allocatedStorage,
+      instanceType: pgstacDbConfig.instanceType,
       addPgbouncer: true,
-      pgstacVersion: pgstacVersion,
+      pgstacVersion: pgstacDbConfig.pgstacVersion,
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
-      subnetType: props.dbSubnetPublic
+      subnetType: pgstacDbConfig.subnetPublic
         ? ec2.SubnetType.PUBLIC
         : ec2.SubnetType.PRIVATE_WITH_EGRESS,
     };
@@ -94,13 +79,13 @@ export class PgStacInfra extends Stack {
       dbSecret: pgstacDb.pgstacSecret,
       subnetSelection: apiSubnetSelection,
       stacApiDomainName:
-        props.stacApiCustomDomainName && props.certificateArn
+        stacApiConfig.customDomainName && certificateArn
           ? new apigatewayv2.DomainName(this, "stac-api-domain-name", {
-              domainName: props.stacApiCustomDomainName,
+              domainName: stacApiConfig.customDomainName,
               certificate: acm.Certificate.fromCertificateArn(
                 this,
                 "stacApiCustomDomainNameCertificate",
-                props.certificateArn,
+                certificateArn,
               ),
             })
           : undefined,
@@ -114,17 +99,17 @@ export class PgStacInfra extends Stack {
 
     stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      sourceArn: props.stacApiIntegrationApiArn,
+      sourceArn: stacApiConfig.integrationApiArn,
     });
 
     // titiler-pgstac
     const titilerDataAccessRole = iam.Role.fromRoleArn(
       this,
       "titiler-data-access-role",
-      titilerDataAccessRoleArn,
+      titilerPgstacConfig.dataAccessRoleArn,
     );
 
-    const fileContents = readFileSync(titilerBucketsPath, "utf8");
+    const fileContents = readFileSync(titilerPgstacConfig.bucketsPath, "utf8");
     const buckets = load(fileContents) as string[];
 
     const titilerPgstacLambdaOptions: CustomLambdaFunctionProps = {
@@ -135,33 +120,39 @@ export class PgStacInfra extends Stack {
       role: titilerDataAccessRole,
     };
 
+    const titilerPgstacApiEnv: Record<string, string> = {
+      NAME: `MAAP titiler pgstac API (${stage})`,
+      VERSION: version,
+      DESCRIPTION: "titiler pgstac API for the MAAP STAC system.",
+    };
+
+    // Only add mosaic configuration if mosaicHost is provided
+    if (titilerPgstacConfig.mosaicHost) {
+      titilerPgstacApiEnv.MOSAIC_BACKEND = "dynamodb://";
+      titilerPgstacApiEnv.MOSAIC_HOST = titilerPgstacConfig.mosaicHost;
+    }
+
     const titilerPgstacApi = new TitilerPgstacApiLambda(
       this,
       "titiler-pgstac-api",
       {
-        apiEnv: {
-          NAME: `MAAP titiler pgstac API (${stage})`,
-          VERSION: version,
-          DESCRIPTION: "titiler pgstac API for the MAAP STAC system.",
-          MOSAIC_BACKEND: "dynamodb://",
-          MOSAIC_HOST: mosaicHost,
-        },
+        apiEnv: titilerPgstacApiEnv,
         vpc,
         db: pgstacDb.connectionTarget,
         dbSecret: pgstacDb.pgstacSecret,
         subnetSelection: apiSubnetSelection,
         buckets: buckets,
         titilerPgstacApiDomainName:
-          props.titilerPgStacApiCustomDomainName && props.certificateArn
+          titilerPgstacConfig.customDomainName && certificateArn
             ? new apigatewayv2.DomainName(
                 this,
                 "titiler-pgstac-api-domain-name",
                 {
-                  domainName: props.titilerPgStacApiCustomDomainName,
+                  domainName: titilerPgstacConfig.customDomainName,
                   certificate: acm.Certificate.fromCertificateArn(
                     this,
                     "titilerPgStacCustomDomainNameCertificate",
-                    props.certificateArn,
+                    certificateArn,
                   ),
                 },
               )
@@ -170,33 +161,37 @@ export class PgStacInfra extends Stack {
       },
     );
 
-    // Add dynamodb permissions to the titiler-pgstac Lambda for mosaicjson support
-    const tableName = mosaicHost.split("/", 2)[1];
+    if (titilerPgstacConfig.mosaicHost) {
+      // Add dynamodb permissions to the titiler-pgstac Lambda for mosaicjson support
+      const tableName = titilerPgstacConfig.mosaicHost.split("/", 2)[1];
 
-    const mosaicPerms = [
-      new iam.PolicyStatement({
-        actions: ["dynamodb:CreateTable", "dynamodb:DescribeTable"],
-        resources: [
-          `arn:aws:dynamodb:${stack.region}:${stack.account}:table/*`,
-        ],
-      }),
-      new iam.PolicyStatement({
-        actions: [
-          "dynamodb:Query",
-          "dynamodb:GetItem",
-          "dynamodb:Scan",
-          "dynamodb:PutItem",
-          "dynamodb:BatchWriteItem",
-        ],
-        resources: [
-          `arn:aws:dynamodb:${stack.region}:${stack.account}:table/${tableName}`,
-        ],
-      }),
-    ];
+      const mosaicPerms = [
+        new iam.PolicyStatement({
+          actions: ["dynamodb:CreateTable", "dynamodb:DescribeTable"],
+          resources: [
+            `arn:aws:dynamodb:${stack.region}:${stack.account}:table/*`,
+          ],
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            "dynamodb:Query",
+            "dynamodb:GetItem",
+            "dynamodb:Scan",
+            "dynamodb:PutItem",
+            "dynamodb:BatchWriteItem",
+          ],
+          resources: [
+            `arn:aws:dynamodb:${stack.region}:${stack.account}:table/${tableName}`,
+          ],
+        }),
+      ];
 
-    mosaicPerms.forEach((permission) => {
-      titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(permission);
-    });
+      mosaicPerms.forEach((permission) => {
+        titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(
+          permission,
+        );
+      });
+    }
 
     // Configure titiler-pgstac for pgbouncer
     titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
@@ -320,49 +315,51 @@ export class PgStacInfra extends Stack {
     );
 
     // STAC Ingestor
-    const ingestorDataAccessRole = iam.Role.fromRoleArn(
-      this,
-      "ingestor-data-access-role",
-      ingestorDataAccessRoleArn,
-    );
+    if (ingestorConfig) {
+      const ingestorDataAccessRole = iam.Role.fromRoleArn(
+        this,
+        "ingestor-data-access-role",
+        ingestorConfig.dataAccessRoleArn,
+      );
 
-    new BastionHost(this, "bastion-host", {
-      vpc,
-      db: pgstacDb.db,
-      ipv4Allowlist: props.bastionIpv4AllowList,
-      userData: ec2.UserData.custom(
-        readFileSync(props.bastionUserDataPath, { encoding: "utf-8" }),
-      ),
-      createElasticIp: props.bastionHostCreateElasticIp,
-    });
+      new BastionHost(this, "bastion-host", {
+        vpc,
+        db: pgstacDb.db,
+        ipv4Allowlist: ingestorConfig.ipv4AllowList,
+        userData: ec2.UserData.custom(
+          readFileSync(ingestorConfig.userDataPath, { encoding: "utf-8" }),
+        ),
+        createElasticIp: ingestorConfig.createElasticIp,
+      });
 
-    new StacIngestor(this, "stac-ingestor", {
-      vpc,
-      stacUrl: stacApiLambda.url,
-      dataAccessRole: ingestorDataAccessRole,
-      stage,
-      stacDbSecret: pgstacDb.pgstacSecret,
-      stacDbSecurityGroup: pgstacDb.securityGroup!,
-      subnetSelection: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      apiEnv: {
-        JWKS_URL: jwksUrl,
-        REQUESTER_PAYS: "true",
-      },
-      pgstacVersion,
-      ingestorDomainNameOptions:
-        props.IngestorDomainName && props.certificateArn
-          ? {
-              domainName: props.IngestorDomainName,
-              certificate: acm.Certificate.fromCertificateArn(
-                this,
-                "ingestorCustomDomainNameCertificate",
-                props.certificateArn,
-              ),
-            }
-          : undefined,
-    });
+      new StacIngestor(this, "stac-ingestor", {
+        vpc,
+        stacUrl: stacApiLambda.url,
+        dataAccessRole: ingestorDataAccessRole,
+        stage,
+        stacDbSecret: pgstacDb.pgstacSecret,
+        stacDbSecurityGroup: pgstacDb.securityGroup!,
+        subnetSelection: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        apiEnv: {
+          JWKS_URL: ingestorConfig.jwksUrl,
+          REQUESTER_PAYS: "true",
+        },
+        pgstacVersion: pgstacDbConfig.pgstacVersion,
+        ingestorDomainNameOptions:
+          ingestorConfig.domainName && certificateArn
+            ? {
+                domainName: ingestorConfig.domainName,
+                certificate: acm.Certificate.fromCertificateArn(
+                  this,
+                  "ingestorCustomDomainNameCertificate",
+                  certificateArn,
+                ),
+              }
+            : undefined,
+      });
+    }
 
     // STAC Browser Infrastructure
     const rootPath = "index.html";
@@ -381,14 +378,14 @@ export class PgStacInfra extends Stack {
       {
         defaultBehavior: { origin: new origins.S3Origin(stacBrowserBucket) },
         defaultRootObject: rootPath,
-        domainNames: [props.stacBrowserCustomDomainName],
+        domainNames: [stacBrowserConfig.customDomainName],
         certificate: acm.Certificate.fromCertificateArn(
           this,
           "stacBrowserCustomDomainNameCertificate",
-          props.stacBrowserCertificateArn,
+          stacBrowserConfig.certificateArn,
         ),
         enableLogging: true,
-        logBucket: maapLoggingBucket,
+        logBucket: props.loggingBucket,
         logFilePrefix: "stac-browser",
         errorResponses: [
           {
@@ -409,10 +406,12 @@ export class PgStacInfra extends Stack {
 
     new StacBrowser(this, "stac-browser", {
       bucketArn: stacBrowserBucket.bucketArn,
-      stacCatalogUrl: props.stacApiCustomDomainName.startsWith("https://")
-        ? props.stacApiCustomDomainName
-        : `https://${props.stacApiCustomDomainName}/`,
-      githubRepoTag: props.stacBrowserRepoTag,
+      stacCatalogUrl: stacApiConfig.customDomainName
+        ? stacApiConfig.customDomainName.startsWith("https://")
+          ? stacApiConfig.customDomainName
+          : `https://${stacApiConfig.customDomainName}/`
+        : stacApiLambda.url,
+      githubRepoTag: stacBrowserConfig.repoTag,
       websiteIndexDocument: rootPath,
     });
 
@@ -434,12 +433,12 @@ export class PgStacInfra extends Stack {
       }),
     );
 
-    maapLoggingBucket.addToResourcePolicy(
+    props.loggingBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: "AllowCloudFrontServicePrincipal",
         effect: iam.Effect.ALLOW,
         actions: ["s3:PutObject"],
-        resources: [maapLoggingBucket.arnForObjects("AWSLogs/*")],
+        resources: [props.loggingBucket.arnForObjects("AWSLogs/*")],
         principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
         conditions: {
           StringEquals: {
@@ -466,111 +465,130 @@ export interface Props extends StackProps {
   version: string;
 
   /**
-   * RDS Instance type
-   */
-  dbInstanceType: ec2.InstanceType;
-
-  /**
-   * Flag to control whether database should be deployed into a
-   * public subnet.
-   */
-  dbSubnetPublic?: boolean;
-
-  /**
-   * Where userdata.yaml is found.
-   */
-  bastionUserDataPath: string;
-
-  /**
-   * Which IPs to allow to access bastion host.
-   */
-  bastionIpv4AllowList: string[];
-
-  /**
-   * Flag to control whether the Bastion Host should make a non-dynamic elastic IP.
-   */
-  bastionHostCreateElasticIp?: boolean;
-
-  /**
-   * URL of JWKS endpoint, provided as output from ASDI-Auth.
-   *
-   * Example: "https://cognito-idp.{region}.amazonaws.com/{region}_{userpool_id}/.well-known/jwks.json"
-   */
-  jwksUrl: string;
-
-  /**
-   * ARN of IAM role that will be assumed by the titiler Lambda
-   */
-  titilerDataAccessRoleArn: string;
-
-  /**
-   * ARN of IAM role that will be assumed by the STAC Ingestor.
-   */
-  ingestorDataAccessRoleArn: string;
-  /**
-   * STAC API api gateway source ARN to be granted STAC API lambda invoke permission.
-   */
-  stacApiIntegrationApiArn: string;
-
-  /**
-   * allocated storage for pgstac database
-   */
-  allocatedStorage: number;
-
-  /**
-   * mosaicjson dynamodb host for titiler in form of aws-region/table-name
-   */
-  mosaicHost: string;
-
-  /**
-   * yaml file containing the list of buckets the titiler lambda should be granted access to
-   */
-  titilerBucketsPath: string;
-
-  /**
-   * ARN of ACM certificate to use for CDN.
+   * ARN of ACM certificate to use for eoAPI custom domains
    * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
    */
   certificateArn?: string | undefined;
 
-  /**
-   * Domain name to use for CDN. If defined, a new CDN will be created
-   * Example: "stac.maap.xyz"
-   */
-  IngestorDomainName?: string | undefined;
+  loggingBucket: Bucket;
+
+  pgstacDbConfig: {
+    /**
+     * RDS Instance type
+     */
+    instanceType: ec2.InstanceType;
+
+    /**
+     * Flag to control whether database should be deployed into a
+     * public subnet.
+     */
+    subnetPublic: boolean;
+
+    /**
+     * allocated storage for pgstac database
+     */
+    allocatedStorage: number;
+
+    /**
+     * version of pgstac to install on the database
+     */
+    pgstacVersion: string;
+  };
+
+  titilerPgstacConfig: {
+    /**
+     * mosaicjson dynamodb host for titiler in form of aws-region/table-name
+     */
+    mosaicHost?: string | undefined;
+
+    /**
+     * yaml file containing the list of buckets the titiler lambda should be granted access to
+     */
+    bucketsPath: string;
+
+    /**
+     * ARN of IAM role that will be assumed by the titiler Lambda
+     */
+    dataAccessRoleArn: string;
+
+    /**
+     * Domain name to use for titiler pgstac api. If defined, a new custom domain name will be created.
+     * Example: "titiler-pgstac-api.dit.maap-project.org"
+     */
+    customDomainName?: string | undefined;
+  };
+
+  stacApiConfig: {
+    /**
+     * Domain name to use for stac api. If defined, a new CDN will be created.
+     * Example: "stac-api.dit.maap-project.org""
+     */
+    customDomainName?: string;
+
+    /**
+     * STAC API api gateway source ARN to be granted STAC API lambda invoke permission.
+     */
+    integrationApiArn: string;
+  };
 
   /**
-   * Domain name to use for titiler pgstac api. If defined, a new CDN will be created.
-   * Example: "titiler-pgstac-api.dit.maap-project.org"
+   * Configuration for the STAC Browser
    */
-  titilerPgStacApiCustomDomainName?: string | undefined;
+  stacBrowserConfig: {
+    /**
+     * Tag of the stac-browser repo from https://github.com/radiantearth/stac-browser
+     * Example: "v3.2.0"
+     */
+    repoTag: string;
 
-  /**
-   * Domain name to use for stac api. If defined, a new CDN will be created.
-   * Example: "stac-api.dit.maap-project.org""
-   */
-  stacApiCustomDomainName: string;
+    /**
+     * Domain name for use in cloudfront distribution for stac-browser
+     * Example: "stac-browser.maap-project.org"
+     */
+    customDomainName: string;
 
-  /**
-   * Tag of the stac-browser repo from https://github.com/radiantearth/stac-browser
-   * Example: "v3.2.0"
-   */
-  stacBrowserRepoTag: string;
+    /**
+     * ARN of ACM certificate to use for Cloudfront Distribution (Must be us-east-1).
+     * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+     */
+    certificateArn: string;
+  };
 
+  // === OPTIONAL COMPONENTS ===
   /**
-   * Domain name for use in cloudfront distribution for stac-browser
-   * Example: "stac-browser.maap-project.org"
+   * Configuration for the STAC Ingestor. If not provided, STAC Ingestor will not be created.
    */
-  stacBrowserCustomDomainName: string;
+  ingestorConfig?: {
+    /**
+     * URL of JWKS endpoint, provided as output from ASDI-Auth.
+     *
+     * Example: "https://cognito-idp.{region}.amazonaws.com/{region}_{userpool_id}/.well-known/jwks.json"
+     */
+    jwksUrl: string;
+    /**
+     * ARN of IAM role that will be assumed by the STAC Ingestor.
+     */
+    dataAccessRoleArn: string;
 
-  /**
-   * ARN of ACM certificate to use for Cloudfront Distribution (Must be us-east-1).
-   * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
-   */
-  stacBrowserCertificateArn: string;
+    /**
+     * Domain name to use for CDN. If defined, a new CDN will be created
+     * Example: "stac.maap.xyz"
+     */
+    domainName?: string | undefined;
 
-  /**
-   * version of pgstac to install on the database
-   */
-  pgstacVersion: string;
+    /**
+     * Where userdata.yaml is found.
+     */
+    userDataPath: string;
+
+    /**
+     * Which IPs to allow to access bastion host.
+     */
+    ipv4AllowList: string[];
+
+    /**
+     * Flag to control whether the Bastion Host should make a non-dynamic elastic IP.
+     */
+    createElasticIp?: boolean;
+  };
 }
