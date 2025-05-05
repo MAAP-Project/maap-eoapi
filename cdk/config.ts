@@ -19,6 +19,7 @@ export class Config {
   readonly stacBrowserCustomDomainName: string;
   readonly stacBrowserCertificateArn: string;
   readonly pgstacVersion: string;
+  readonly webAclArn: string;
 
   constructor() {
     // These are required environment variables and cannot be undefined
@@ -59,6 +60,10 @@ export class Config {
       {
         name: "PGSTAC_VERSION",
         value: process.env.PGSTAC_VERSION,
+      },
+      {
+        name: "WEB_ACL_ARN", 
+        value: process.env.WEB_ACL_ARN,
       },
     ];
 
@@ -108,6 +113,7 @@ export class Config {
     this.titilerPgStacApiCustomDomainName =
       process.env.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
     this.pgstacVersion = process.env.PGSTAC_VERSION!;
+    this.webAclArn = process.env.WEB_ACL_ARN!;
   }
 
   /**
