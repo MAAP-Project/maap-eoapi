@@ -115,8 +115,10 @@ export class PgStacInfra extends Stack {
     const titilerPgstacLambdaOptions: CustomLambdaFunctionProps = {
       code: lambda.Code.fromDockerBuild(__dirname, {
         file: "dockerfiles/Dockerfile.raster",
-        buildArgs: { PYTHON_VERSION: "3.11" },
+        buildArgs: { PYTHON_VERSION: "3.12" },
       }),
+      snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
+      runtime: lambda.Runtime.PYTHON_3_12,
       role: titilerDataAccessRole,
     };
 
@@ -160,6 +162,9 @@ export class PgStacInfra extends Stack {
         lambdaFunctionOptions: titilerPgstacLambdaOptions,
       },
     );
+
+    const titilerPgstacFnVersion =
+      titilerPgstacApi.titilerPgstacLambdaFunction.currentVersion;
 
     if (titilerPgstacConfig.mosaicHost) {
       // Add dynamodb permissions to the titiler-pgstac Lambda for mosaicjson support

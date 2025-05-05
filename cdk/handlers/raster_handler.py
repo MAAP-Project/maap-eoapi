@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import time
 from urllib.parse import urlparse
 
 from eoapi.raster.main import app
@@ -33,11 +34,15 @@ pg_settings = PostgresSettings(
     postgres_port=secret["port"],
 )
 
+_pool_reset_done = False
+
 
 @app.on_event("startup")
 async def startup_event() -> None:
     """Connect to database on startup."""
+    print("Lambda Init: Connecting to DB and creating pool...")
     await connect_to_db(app, settings=pg_settings)
+    print("Lambda Init: DB Pool created.")
 
     app.state.path_templates = {}
     for route in app.routes:
@@ -95,8 +100,49 @@ async def log_request_data(request: Request, call_next):
     return response
 
 
-handler = Mangum(app, lifespan="off")
+mangum_handler = Mangum(app, lifespan="off")
 
 if "AWS_EXECUTION_ENV" in os.environ:
+    print("Lambda Init: Running FastAPI startup events...")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(app.router.startup())
+    print("Lambda Init: FastAPI startup complete.")
+
+
+def handler(event, context):
+    """
+    Lambda handler function with post-SnapStart restore logic.
+    """
+    global _pool_reset_done
+
+    start_time = time.monotonic()
+
+    if not _pool_reset_done:
+        print("First invocation after restore OR cold start: Resetting DB connections.")
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if hasattr(app.state, "dbpool") and app.state.dbpool:
+            print("Closing existing DB pool...")
+            try:
+                app.state.dbpool.close()
+                print("Existing DB pool closed.")
+            except Exception as e:
+                print(f"Error closing potentially stale pool: {e}")
+            app.state.dbpool = None
+
+        print("Re-initializing DB pool...")
+        try:
+            loop.run_until_complete(connect_to_db(app, settings=pg_settings))
+            print("DB Pool re-initialized successfully.")
+            _pool_reset_done = True  # Mark reset as done for this environment instance
+        except Exception as e:
+            print(f"FATAL: Failed to re-initialize DB pool after restore: {e}")
+            raise e
+
+        print(f"Post-restore pool reset took: {(time.monotonic() - start_time):.4f}s")
+
+    return mangum_handler(event, context)
