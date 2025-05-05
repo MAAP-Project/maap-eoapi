@@ -372,6 +372,20 @@ export class PgStacInfra extends Stack {
       enforceSSL: true,
     });
 
+    const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
+      accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+      removalPolicy: RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      bucketName: `maap-logging-${stage}`,
+      enforceSSL: true,
+      lifecycleRules: [
+        {
+          enabled: true,
+          expiration: Duration.days(90),
+        },
+      ],
+    });
+
     const stacBrowserOrigin = new cloudfront.Distribution(
       this,
       "stacBrowserDistro",
@@ -385,7 +399,7 @@ export class PgStacInfra extends Stack {
           stacBrowserConfig.certificateArn,
         ),
         enableLogging: true,
-        logBucket: props.loggingBucket,
+        logBucket: loggingBucket,
         logFilePrefix: "stac-browser",
         errorResponses: [
           {
@@ -433,12 +447,12 @@ export class PgStacInfra extends Stack {
       }),
     );
 
-    props.loggingBucket.addToResourcePolicy(
+    loggingBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: "AllowCloudFrontServicePrincipal",
         effect: iam.Effect.ALLOW,
         actions: ["s3:PutObject"],
-        resources: [props.loggingBucket.arnForObjects("AWSLogs/*")],
+        resources: [loggingBucket.arnForObjects("AWSLogs/*")],
         principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
         conditions: {
           StringEquals: {
@@ -469,8 +483,6 @@ export interface Props extends StackProps {
    * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
    */
   certificateArn?: string | undefined;
-
-  loggingBucket: Bucket;
 
   pgstacDbConfig: {
     /**

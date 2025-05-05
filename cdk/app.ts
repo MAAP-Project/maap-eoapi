@@ -36,30 +36,11 @@ const { vpc } = new Vpc(app, buildStackName("vpc"), {
   natGatewayCount: stage === "prod" ? undefined : 1,
 });
 
-const loggingBucket = new cdk.aws_s3.Bucket(
-  app,
-  buildStackName("maapLoggingBucket"),
-  {
-    accessControl: cdk.aws_s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-    removalPolicy: RemovalPolicy.DESTROY,
-    blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
-    bucketName: `maap-logging-${stage}`,
-    enforceSSL: true,
-    lifecycleRules: [
-      {
-        enabled: true,
-        expiration: Duration.days(90),
-      },
-    ],
-  },
-);
-
 new PgStacInfra(app, buildStackName("pgSTAC"), {
   vpc,
   tags,
   stage,
   version,
-  loggingBucket,
   certificateArn,
   pgstacDbConfig: {
     instanceType: dbInstanceType,
