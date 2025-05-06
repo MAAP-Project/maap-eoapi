@@ -26,6 +26,7 @@ dependencies = [
     "importlib_resources>=1.1.0;python_version<'3.9'",
 ]
 
+
 [project.optional-dependencies]
 # https://www.psycopg.org/psycopg3/docs/api/pq.html#pq-module-implementations
 psycopg = [  # pure python implementation
