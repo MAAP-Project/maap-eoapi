@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 from urllib.parse import urlparse
 
@@ -14,6 +13,7 @@ from eoapi.raster.utils import get_secret_dict
 from fastapi import Request
 from fastapi.routing import APIRoute
 from mangum import Mangum
+from snapshot_restore_py import register_after_restore, register_before_snapshot
 from titiler.pgstac.db import connect_to_db
 from titiler.pgstac.settings import PostgresSettings
 
@@ -35,36 +35,8 @@ pg_settings = PostgresSettings(
     postgres_port=secret["port"],
 )
 
-# Track whether connection initialization has been done after restore
+
 _connection_initialized = False
-
-
-# Runtime hook for SnapStart - this is called before the snapshot is taken
-def on_snap_start(event):
-    """
-    Runtime hook called by Lambda before taking a snapshot.
-    We close database connections that shouldn't be in the snapshot.
-    """
-    logger.info("SnapStart: Preparing for snapshot")
-
-    # Close any existing database connections before the snapshot is taken
-    if hasattr(app, "state") and hasattr(app.state, "dbpool") and app.state.dbpool:
-        logger.info("SnapStart: Closing database pool")
-        try:
-            app.state.dbpool.close()
-            app.state.dbpool = None
-            logger.info("SnapStart: Database pool closed successfully")
-        except Exception as e:
-            logger.error(f"SnapStart: Error closing database pool: {e}")
-
-    logger.info("SnapStart: Snapshot preparation complete")
-    return {"statusCode": 200}
-
-
-# Register the runtime hook at module level - this is crucial for SnapStart
-if "AWS_LAMBDA_RUNTIME_API" in os.environ:
-    current_module = sys.modules[__name__]
-    setattr(current_module, "on_snap_start", on_snap_start)
 
 
 @app.on_event("startup")
@@ -91,6 +63,7 @@ async def startup_event() -> None:
             route_path = route.path.replace(":", "__")
             pattern = re.sub(r"{([^}]+)}", r"(?P<\1>[^/]+)", route_path)
             app.state.path_templates[re.compile(f"^{pattern}$")] = route_path
+
     logger.info(
         f"FastAPI startup: Route templates built in {time.monotonic() - templates_start:.3f}s"
     )
@@ -147,9 +120,6 @@ async def log_request_data(request: Request, call_next):
     return response
 
 
-# Create Mangum handler with lifespan="off" - we'll manage lifespan manually
-mangum_handler = Mangum(app, lifespan="off")
-
 # Run FastAPI startup events during Lambda initialization
 if "AWS_EXECUTION_ENV" in os.environ:
     logger.info("Lambda Init: Running FastAPI startup events")
@@ -158,16 +128,84 @@ if "AWS_EXECUTION_ENV" in os.environ:
     logger.info("Lambda Init: FastAPI startup complete")
 
 
-def handler(event, context):
+@register_before_snapshot
+def on_snapshot():
     """
-    Lambda handler with SnapStart support.
-    Manages database connections for cold starts and SnapStart restoration.
+    Runtime hook called by Lambda before taking a snapshot.
+    We close database connections that shouldn't be in the snapshot.
+    """
+    logger.info("SnapStart: Preparing for snapshot")
+
+    # Close any existing database connections before the snapshot is taken
+    if hasattr(app, "state") and hasattr(app.state, "dbpool") and app.state.dbpool:
+        logger.info("SnapStart: Closing database pool")
+        try:
+            app.state.dbpool.close()
+            app.state.dbpool = None
+            logger.info("SnapStart: Database pool closed successfully")
+        except Exception as e:
+            logger.error(f"SnapStart: Error closing database pool: {e}")
+
+    logger.info("SnapStart: Snapshot preparation complete")
+    return {"statusCode": 200}
+
+
+@register_after_restore
+def on_snap_restore():
+    """
+    Runtime hook called by Lambda after restoring from a snapshot.
+    We recreate database connections that were closed before the snapshot.
     """
     global _connection_initialized
 
+    logger.info("SnapStart: Restoration detected - recreating database connections")
     start_time = time.monotonic()
 
-    # Get Lambda execution context information
+    try:
+        # Get the event loop or create a new one
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Close any existing pool (from snapshot)
+        if hasattr(app.state, "dbpool") and app.state.dbpool:
+            logger.info("SnapStart: Closing existing DB pool from snapshot")
+            try:
+                app.state.dbpool.close()
+            except Exception as e:
+                logger.warning(f"SnapStart: Error closing stale pool: {e}")
+            app.state.dbpool = None
+
+        # Create fresh connection pool
+        logger.info("SnapStart: Creating new database connection pool")
+        connection_start = time.monotonic()
+        loop.run_until_complete(connect_to_db(app, settings=pg_settings))
+        logger.info(
+            f"SnapStart: Database connection established in {time.monotonic() - connection_start:.3f}s"
+        )
+
+        _connection_initialized = True
+
+    except Exception as e:
+        logger.error(f"SnapStart: Failed to initialize database connection: {e}")
+        raise
+
+    logger.info(
+        f"SnapStart: Restoration processing completed in {time.monotonic() - start_time:.3f}s"
+    )
+    return {"statusCode": 200}
+
+
+mangum_handler = Mangum(app, lifespan="off")
+
+
+def handler(event, context):
+    """
+    Lambda handler with SnapStart support.
+    Database connections are managed by the on_snap_restore handler.
+    """
     initialization_type = os.environ.get("AWS_LAMBDA_INITIALIZATION_TYPE", "unknown")
     function_version = getattr(context, "function_version", "unknown")
 
@@ -177,45 +215,6 @@ def handler(event, context):
         f"function_version={function_version}, "
         f"connection_initialized={_connection_initialized}"
     )
-
-    # For SnapStart restorations or first invocations, initialize the DB connections
-    if initialization_type == "snap-start" and not _connection_initialized:
-        logger.info("SnapStart restoration detected - recreating database connections")
-
-        try:
-            # Get the event loop or create a new one
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            # Close any existing pool (from snapshot)
-            if hasattr(app.state, "dbpool") and app.state.dbpool:
-                logger.info("Closing existing DB pool from snapshot")
-                try:
-                    app.state.dbpool.close()
-                except Exception as e:
-                    logger.warning(f"Error closing stale pool: {e}")
-                app.state.dbpool = None
-
-            # Create fresh connection pool
-            logger.info("Creating new database connection pool")
-            connection_start = time.monotonic()
-            loop.run_until_complete(connect_to_db(app, settings=pg_settings))
-            logger.info(
-                f"Database connection established in {time.monotonic() - connection_start:.3f}s"
-            )
-
-            _connection_initialized = True
-
-        except Exception as e:
-            logger.error(f"Failed to initialize database connection: {e}")
-            raise
-
-        logger.info(
-            f"SnapStart restoration processing completed in {time.monotonic() - start_time:.3f}s"
-        )
 
     # Process the request using Mangum
     return mangum_handler(event, context)
