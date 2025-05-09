@@ -5,7 +5,7 @@ import * as cdk from "aws-cdk-lib";
 import { Vpc } from "./Vpc";
 import { Config } from "./config";
 import { PgStacInfra } from "./PgStacInfra";
-import { RemovalPolicy, Duration } from "aws-cdk-lib";
+
 const {
   buildStackName,
   certificateArn,
@@ -26,6 +26,7 @@ const {
   titilerDataAccessRoleArn,
   titilerPgStacApiCustomDomainName,
   version,
+  webAclArn,
 } = new Config();
 
 export const app = new cdk.App({});
@@ -42,6 +43,7 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
   stage,
   version,
   certificateArn,
+  webAclArn,
   pgstacDbConfig: {
     instanceType: dbInstanceType,
     pgstacVersion: pgstacVersion,

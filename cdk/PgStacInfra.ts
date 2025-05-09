@@ -23,7 +23,6 @@ import {
 } from "eoapi-cdk";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
-import { Bucket } from "aws-cdk-lib/aws-s3";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -36,6 +35,7 @@ export class PgStacInfra extends Stack {
       stage,
       version,
       certificateArn,
+      webAclArn,
       pgstacDbConfig,
       titilerPgstacConfig,
       stacApiConfig,
@@ -374,14 +374,14 @@ export class PgStacInfra extends Stack {
 
     const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
       accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-      removalPolicy: RemovalPolicy.DESTROY,
+      removalPolicy: RemovalPolicy.RETAIN,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       bucketName: `maap-logging-${stage}`,
       enforceSSL: true,
       lifecycleRules: [
         {
           enabled: true,
-          expiration: Duration.days(90),
+          expiration: Duration.days(395),
         },
       ],
     });
@@ -415,6 +415,7 @@ export class PgStacInfra extends Stack {
             ttl: Duration.seconds(0),
           },
         ],
+        webAclId: webAclArn,
       },
     );
 
@@ -483,6 +484,12 @@ export interface Props extends StackProps {
    * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
    */
   certificateArn?: string | undefined;
+
+  /**
+   * ARN of WAF Web ACL to use for eoAPI custom domains
+   * Example: "arn:aws:wafv2:us-west-2:123456789012:webacl/12345678-1234-1234-1234-123456789012"
+   */
+  webAclArn: string;
 
   pgstacDbConfig: {
     /**
