@@ -65,6 +65,7 @@ jobs:
         STAGE: "${{ github.event.inputs.deployment_environment }}"
         TITILER_DATA_ACCESS_ROLE_ARN: ${{ vars.TITILER_DATA_ACCESS_ROLE_ARN }}
         TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
+        WEB_ACL_ARN: ${{ vars.WEB_ACL_ARN }}
       run: |
         npm install -g aws-cdk
         cdk deploy --all --require-approval never
