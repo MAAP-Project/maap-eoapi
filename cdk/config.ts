@@ -20,6 +20,8 @@ export class Config {
   readonly stacBrowserCertificateArn: string;
   readonly pgstacVersion: string;
   readonly webAclArn: string;
+  readonly bastionHostIpv4AllowList: string[];
+  readonly ingestorApiIpConfig: { [label: string]: string };
 
   constructor() {
     // These are required environment variables and cannot be undefined
@@ -62,7 +64,7 @@ export class Config {
         value: process.env.PGSTAC_VERSION,
       },
       {
-        name: "WEB_ACL_ARN", 
+        name: "WEB_ACL_ARN",
         value: process.env.WEB_ACL_ARN,
       },
     ];
@@ -114,6 +116,17 @@ export class Config {
       process.env.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
     this.pgstacVersion = process.env.PGSTAC_VERSION!;
     this.webAclArn = process.env.WEB_ACL_ARN!;
+
+    this.bastionHostIpv4AllowList = [];
+
+    // Parse IP config from environment variable
+    // Format: JSON with label-IP pairs
+    // Example: '{"office":"192.168.1.1", "vpn":"10.0.0.1"}'
+    if (process.env.BASTION_HOST_IPV4_ALLOW_LIST) {
+      const parsedConfig = JSON.parse(process.env.BASTION_HOST_IPV4_ALLOW_LIST);
+
+      this.bastionHostIpv4AllowList = Object.values(parsedConfig);
+    }
   }
 
   /**

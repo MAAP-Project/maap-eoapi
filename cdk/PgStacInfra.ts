@@ -35,7 +35,6 @@ export class PgStacInfra extends Stack {
       stage,
       version,
       certificateArn,
-      webAclArn,
       pgstacDbConfig,
       titilerPgstacConfig,
       stacApiConfig,
@@ -97,10 +96,12 @@ export class PgStacInfra extends Stack {
       "allow connections from stac-fastapi-pgstac",
     );
 
-    stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      sourceArn: stacApiConfig.integrationApiArn,
-    });
+    if (stacApiConfig.integrationApiArn) {
+      stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
+        principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+        sourceArn: stacApiConfig.integrationApiArn,
+      });
+    }
 
     // titiler-pgstac
     const titilerDataAccessRole = iam.Role.fromRoleArn(
@@ -361,107 +362,109 @@ export class PgStacInfra extends Stack {
       });
     }
 
-    // STAC Browser Infrastructure
-    const rootPath = "index.html";
+    if (stacBrowserConfig) {
+      // STAC Browser Infrastructure
+      const rootPath = "index.html";
 
-    const stacBrowserBucket = new s3.Bucket(this, "stacBrowserBucket", {
-      accessControl: s3.BucketAccessControl.PRIVATE,
-      removalPolicy: RemovalPolicy.DESTROY,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      bucketName: `maap-stac-browser-${stage}`,
-      enforceSSL: true,
-    });
+      const stacBrowserBucket = new s3.Bucket(this, "stacBrowserBucket", {
+        accessControl: s3.BucketAccessControl.PRIVATE,
+        removalPolicy: RemovalPolicy.DESTROY,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        bucketName: `maap-stac-browser-${stage}`,
+        enforceSSL: true,
+      });
 
-    const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
-      accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-      removalPolicy: RemovalPolicy.RETAIN,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      bucketName: `maap-logging-${stage}`,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          enabled: true,
-          expiration: Duration.days(395),
-        },
-      ],
-    });
-
-    const stacBrowserOrigin = new cloudfront.Distribution(
-      this,
-      "stacBrowserDistro",
-      {
-        defaultBehavior: { origin: new origins.S3Origin(stacBrowserBucket) },
-        defaultRootObject: rootPath,
-        domainNames: [stacBrowserConfig.customDomainName],
-        certificate: acm.Certificate.fromCertificateArn(
-          this,
-          "stacBrowserCustomDomainNameCertificate",
-          stacBrowserConfig.certificateArn,
-        ),
-        enableLogging: true,
-        logBucket: loggingBucket,
-        logFilePrefix: "stac-browser",
-        errorResponses: [
+      const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
+        accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+        removalPolicy: RemovalPolicy.RETAIN,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        bucketName: `maap-logging-${stage}`,
+        enforceSSL: true,
+        lifecycleRules: [
           {
-            httpStatus: 403,
-            responseHttpStatus: 200,
-            responsePagePath: `/${rootPath}`,
-            ttl: Duration.seconds(0),
-          },
-          {
-            httpStatus: 404,
-            responseHttpStatus: 200,
-            responsePagePath: `/${rootPath}`,
-            ttl: Duration.seconds(0),
+            enabled: true,
+            expiration: Duration.days(395),
           },
         ],
-        webAclId: webAclArn,
-      },
-    );
+      });
 
-    new StacBrowser(this, "stac-browser", {
-      bucketArn: stacBrowserBucket.bucketArn,
-      stacCatalogUrl: stacApiConfig.customDomainName
-        ? stacApiConfig.customDomainName.startsWith("https://")
-          ? stacApiConfig.customDomainName
-          : `https://${stacApiConfig.customDomainName}/`
-        : stacApiLambda.url,
-      githubRepoTag: stacBrowserConfig.repoTag,
-      websiteIndexDocument: rootPath,
-    });
-
-    const accountId = Aws.ACCOUNT_ID;
-    const distributionArn = `arn:aws:cloudfront::${accountId}:distribution/${stacBrowserOrigin.distributionId}`;
-
-    stacBrowserBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: "AllowCloudFrontServicePrincipal",
-        effect: iam.Effect.ALLOW,
-        actions: ["s3:GetObject"],
-        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
-        resources: [stacBrowserBucket.arnForObjects("*")],
-        conditions: {
-          StringEquals: {
-            "aws:SourceArn": distributionArn,
-          },
+      const stacBrowserOrigin = new cloudfront.Distribution(
+        this,
+        "stacBrowserDistro",
+        {
+          defaultBehavior: { origin: new origins.S3Origin(stacBrowserBucket) },
+          defaultRootObject: rootPath,
+          domainNames: [stacBrowserConfig.customDomainName],
+          certificate: acm.Certificate.fromCertificateArn(
+            this,
+            "stacBrowserCustomDomainNameCertificate",
+            stacBrowserConfig.certificateArn,
+          ),
+          enableLogging: true,
+          logBucket: loggingBucket,
+          logFilePrefix: "stac-browser",
+          errorResponses: [
+            {
+              httpStatus: 403,
+              responseHttpStatus: 200,
+              responsePagePath: `/${rootPath}`,
+              ttl: Duration.seconds(0),
+            },
+            {
+              httpStatus: 404,
+              responseHttpStatus: 200,
+              responsePagePath: `/${rootPath}`,
+              ttl: Duration.seconds(0),
+            },
+          ],
+          webAclId: stacBrowserConfig.webAclArn,
         },
-      }),
-    );
+      );
 
-    loggingBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: "AllowCloudFrontServicePrincipal",
-        effect: iam.Effect.ALLOW,
-        actions: ["s3:PutObject"],
-        resources: [loggingBucket.arnForObjects("AWSLogs/*")],
-        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
-        conditions: {
-          StringEquals: {
-            "aws:SourceArn": distributionArn,
+      new StacBrowser(this, "stac-browser", {
+        bucketArn: stacBrowserBucket.bucketArn,
+        stacCatalogUrl: stacApiConfig.customDomainName
+          ? stacApiConfig.customDomainName.startsWith("https://")
+            ? stacApiConfig.customDomainName
+            : `https://${stacApiConfig.customDomainName}/`
+          : stacApiLambda.url,
+        githubRepoTag: stacBrowserConfig.repoTag,
+        websiteIndexDocument: rootPath,
+      });
+
+      const accountId = Aws.ACCOUNT_ID;
+      const distributionArn = `arn:aws:cloudfront::${accountId}:distribution/${stacBrowserOrigin.distributionId}`;
+
+      stacBrowserBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: "AllowCloudFrontServicePrincipal",
+          effect: iam.Effect.ALLOW,
+          actions: ["s3:GetObject"],
+          principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+          resources: [stacBrowserBucket.arnForObjects("*")],
+          conditions: {
+            StringEquals: {
+              "aws:SourceArn": distributionArn,
+            },
           },
-        },
-      }),
-    );
+        }),
+      );
+
+      loggingBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: "AllowCloudFrontServicePrincipal",
+          effect: iam.Effect.ALLOW,
+          actions: ["s3:PutObject"],
+          resources: [loggingBucket.arnForObjects("AWSLogs/*")],
+          principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+          conditions: {
+            StringEquals: {
+              "aws:SourceArn": distributionArn,
+            },
+          },
+        }),
+      );
+    }
   }
 }
 
@@ -484,12 +487,6 @@ export interface Props extends StackProps {
    * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
    */
   certificateArn?: string | undefined;
-
-  /**
-   * ARN of WAF Web ACL to use for eoAPI custom domains
-   * Example: "arn:aws:wafv2:us-west-2:123456789012:webacl/12345678-1234-1234-1234-123456789012"
-   */
-  webAclArn: string;
 
   pgstacDbConfig: {
     /**
@@ -547,13 +544,13 @@ export interface Props extends StackProps {
     /**
      * STAC API api gateway source ARN to be granted STAC API lambda invoke permission.
      */
-    integrationApiArn: string;
+    integrationApiArn?: string;
   };
 
   /**
    * Configuration for the STAC Browser
    */
-  stacBrowserConfig: {
+  stacBrowserConfig?: {
     /**
      * Tag of the stac-browser repo from https://github.com/radiantearth/stac-browser
      * Example: "v3.2.0"
@@ -571,6 +568,12 @@ export interface Props extends StackProps {
      * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
      */
     certificateArn: string;
+
+    /**
+     * ARN of WAF Web ACL to use for eoAPI custom domains
+     * Example: "arn:aws:wafv2:us-west-2:123456789012:webacl/12345678-1234-1234-1234-123456789012"
+     */
+    webAclArn: string;
   };
 
   // === OPTIONAL COMPONENTS ===
