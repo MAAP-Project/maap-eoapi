@@ -21,7 +21,6 @@ export class Config {
   readonly pgstacVersion: string;
   readonly webAclArn: string;
   readonly bastionHostIpv4AllowList: string[];
-  readonly ingestorApiIpConfig: { [label: string]: string };
 
   constructor() {
     // These are required environment variables and cannot be undefined
