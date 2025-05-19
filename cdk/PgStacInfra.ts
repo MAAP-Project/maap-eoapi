@@ -33,6 +33,7 @@ export class PgStacInfra extends Stack {
     const {
       vpc,
       stage,
+      type,
       version,
       certificateArn,
       webAclArn,
@@ -41,21 +42,8 @@ export class PgStacInfra extends Stack {
       stacApiConfig,
       stacBrowserConfig,
       ingestorConfig,
+      loggingBucketArn,
     } = props;
-
-    const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
-      accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-      removalPolicy: RemovalPolicy.RETAIN,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      bucketName: `maap-logging-${stage}`,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          enabled: true,
-          expiration: Duration.days(395),
-        },
-      ],
-    });
 
     // Pgstac Database
     const pgstacDb = new PgStacDatabase(this, "pgstac-db", {
@@ -84,9 +72,10 @@ export class PgStacInfra extends Stack {
     // STAC API
     const stacApiLambda = new PgStacApiLambda(this, "pgstac-api", {
       apiEnv: {
-        NAME: `MAAP STAC API (${stage})`,
-        VERSION: version,
-        DESCRIPTION: "STAC API for the MAAP STAC system.",
+        STAC_FASTAPI_TITLE: `MAAP ${type} STAC API (${stage})`,
+        STAC_FASTAPI_LANDING_ID: `maap-${type}-stac-api-${stage}`,
+        STAC_FASTAPI_DESCRIPTION: `The ${type} STAC API for the [MAAP project](https://maap-project.org)`,
+        STAC_FASTAPI_VERSION: version,
       },
       vpc,
       db: pgstacDb.connectionTarget,
@@ -219,7 +208,7 @@ export class PgStacInfra extends Stack {
     // API logging dashboard
 
     const eoapiDashboard = new cloudwatch.Dashboard(this, "eoAPIDashboard", {
-      dashboardName: `eoAPI-${stage}`,
+      dashboardName: `eoAPI-${stage}-${type}`,
     });
 
     // widget showing count by application route
@@ -377,6 +366,9 @@ export class PgStacInfra extends Stack {
       });
     }
 
+    const logBucket = s3.Bucket.fromBucketAttributes(this, "LoggingBucket", {
+      bucketArn: loggingBucketArn,
+    });
     if (stacBrowserConfig) {
       // STAC Browser Infrastructure
       const rootPath = "index.html";
@@ -402,8 +394,8 @@ export class PgStacInfra extends Stack {
             stacBrowserConfig.certificateArn,
           ),
           enableLogging: true,
-          logBucket: loggingBucket,
-          logFilePrefix: "stac-browser",
+          logBucket,
+          logFilePrefix: `stac-browser-${type}`,
           errorResponses: [
             {
               httpStatus: 403,
@@ -451,12 +443,12 @@ export class PgStacInfra extends Stack {
         }),
       );
 
-      loggingBucket.addToResourcePolicy(
+      logBucket.addToResourcePolicy(
         new iam.PolicyStatement({
           sid: "AllowCloudFrontServicePrincipal",
           effect: iam.Effect.ALLOW,
           actions: ["s3:PutObject"],
-          resources: [loggingBucket.arnForObjects("AWSLogs/*")],
+          resources: [logBucket.arnForObjects("AWSLogs/*")],
           principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
           conditions: {
             StringEquals: {
@@ -478,6 +470,11 @@ export interface Props extends StackProps {
   stage: string;
 
   /**
+   * Type of this deployment, e.g. "public", "internal"
+   */
+  type: string;
+
+  /**
    * Version of this stack. Used to correlate codebase versions
    * to services running.
    */
@@ -494,6 +491,11 @@ export interface Props extends StackProps {
    * Example: "arn:aws:wafv2:us-west-2:123456789012:webacl/12345678-1234-1234-1234-123456789012"
    */
   webAclArn: string;
+
+  /**
+   * ARN for S3 bucket for logging
+   */
+  loggingBucketArn: string;
 
   pgstacDbConfig: {
     /**
