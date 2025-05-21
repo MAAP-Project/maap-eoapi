@@ -1,71 +1,94 @@
-name: deploy
+name: Infrastructure CI/CD
 
 permissions:
   id-token: write  # required for requesting the JWT
   contents: read  # required for actions/checkout
 
 on:
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       deployment_environment:
-        description: 'environment'
+        description: 'Environment to deploy to'
         required: true
+        type: choice
+        options:
+          - dev
+          - test
 
 jobs:
-  build_and_deploy:
+  cdk_operations:
+    name: "CDK Operations"
     runs-on: ubuntu-latest
-    environment: "${{ github.event.inputs.deployment_environment }}"
+    
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_environment || 'synthtest' }}
+    
+    env:
+      AUTHOR: ${{ github.actor }}
+      BASTION_HOST_IPV4_ALLOW_LIST: ${{ vars.BASTION_HOST_IPV4_ALLOW_LIST }}
+      CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
+      COMMIT_SHA: ${{ github.sha }}
+      DB_ALLOCATED_STORAGE: ${{ vars.DB_ALLOCATED_STORAGE }}
+      DB_INSTANCE_TYPE: ${{ vars.DB_INSTANCE_TYPE }}
+      GIT_REPOSITORY: ${{ github.repository }}
+      INGESTOR_DOMAIN_NAME: ${{ vars.INGESTOR_DOMAIN_NAME }}
+      MOSAIC_HOST: ${{ vars.MOSAIC_HOST }}
+      PGSTAC_VERSION: ${{ vars.PGSTAC_VERSION }}
+      STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_API_CUSTOM_DOMAIN_NAME }}
+      STAC_API_INTEGRATION_API_ARN: ${{ vars.STAC_API_INTEGRATION_API_ARN }}
+      STAC_BROWSER_CERTIFICATE_ARN: ${{ vars.STAC_BROWSER_CERTIFICATE_ARN }}
+      STAC_BROWSER_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_BROWSER_CUSTOM_DOMAIN_NAME }}
+      STAC_BROWSER_REPO_TAG: ${{ vars.STAC_BROWSER_REPO_TAG }}
+      STAGE: ${{ github.event.inputs.deployment_environment || 'synthtest' }}
+      TITILER_DATA_ACCESS_ROLE_ARN: ${{ vars.TITILER_DATA_ACCESS_ROLE_ARN }}
+      TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
+      WEB_ACL_ARN: ${{ vars.WEB_ACL_ARN }}
     
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-    - name: Set up node
-      uses: actions/setup-node@v2
-      with:
-        node-version: 20
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Assume Github OIDC role
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-region: us-west-2
-        role-to-assume: ${{ vars.DEPLOY_ROLE }}
-        role-session-name: MAAP-eoapi-${{ github.event.inputs.deployment_environment }}-deploy
+      - name: Assume Github OIDC role
+        uses: aws-actions/configure-aws-credentials@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          aws-region: us-west-2
+          role-to-assume: ${{ vars.DEPLOY_ROLE }}
+          role-session-name: MAAP-eoapi-${{ github.event.inputs.deployment_environment || 'synthtest' }}-deploy
 
-    - name: Install deployment dependencies
-      run: | 
-        npm install
+      - name: Import stacks variables to github output
+        id: import-stacks-vars-to-output
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          AUTH_STACK_NAME: ${{ vars.AUTH_STACK_NAME }}
+          ROLES_STACK_NAME: ${{ vars.ROLES_STACK_NAME }}
+        run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $AUTH_STACK_NAME $ROLES_STACK_NAME
 
-    - name: Import stacks variables to github output
-      id: import-stacks-vars-to-output
-      env:
-        AUTH_STACK_NAME: ${{ vars.AUTH_STACK_NAME }}
-        ROLES_STACK_NAME: ${{ vars.ROLES_STACK_NAME }}
-      run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $AUTH_STACK_NAME $ROLES_STACK_NAME
+      - name: Set dynamic environment variables
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "INGESTOR_DATA_ACCESS_ROLE_ARN=${{ steps.import-stacks-vars-to-output.outputs.INGESTOR_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
+          echo "JWKS_URL=${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}" >> $GITHUB_ENV
+      
+      - name: Set fallback dynamic variables for synthtest
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "INGESTOR_DATA_ACCESS_ROLE_ARN=${{ vars.INGESTOR_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
+          echo "JWKS_URL=${{ vars.JWKS_URL }}" >> $GITHUB_ENV
 
-    - name: Run CDK deploy
-      env:
-        AUTHOR: ${{ github.actor }}
-        CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
-        COMMIT_SHA: ${{ github.sha }}
-        DB_ALLOCATED_STORAGE: ${{ vars.DB_ALLOCATED_STORAGE }}
-        DB_INSTANCE_TYPE: ${{ vars.DB_INSTANCE_TYPE }}
-        GIT_REPOSITORY: ${{ github.repository}}
-        INGESTOR_DATA_ACCESS_ROLE_ARN: ${{ steps.import-stacks-vars-to-output.outputs.INGESTOR_DATA_ACCESS_ROLE_ARN }}
-        INGESTOR_DOMAIN_NAME: ${{ vars.INGESTOR_DOMAIN_NAME }}
-        JWKS_URL: ${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}
-        MOSAIC_HOST: ${{ vars.MOSAIC_HOST }}
-        PGSTAC_VERSION: ${{ vars.PGSTAC_VERSION }}
-        STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_API_CUSTOM_DOMAIN_NAME}}
-        STAC_API_INTEGRATION_API_ARN: ${{ vars.STAC_API_INTEGRATION_API_ARN }}
-        STAC_BROWSER_CERTIFICATE_ARN: ${{ vars.STAC_BROWSER_CERTIFICATE_ARN }}
-        STAC_BROWSER_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_BROWSER_CUSTOM_DOMAIN_NAME }}
-        STAC_BROWSER_REPO_TAG: ${{ vars.STAC_BROWSER_REPO_TAG }}
-        STAGE: "${{ github.event.inputs.deployment_environment }}"
-        TITILER_DATA_ACCESS_ROLE_ARN: ${{ vars.TITILER_DATA_ACCESS_ROLE_ARN }}
-        TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
-        WEB_ACL_ARN: ${{ vars.WEB_ACL_ARN }}
-      run: |
-        npm install -g aws-cdk
-        cdk deploy --all --require-approval never
+      - name: Run CDK synth
+        run: npm run cdk -- synth
+
+      - name: Run CDK deploy
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run cdk -- deploy --all --require-approval never

@@ -11,6 +11,7 @@ const {
   certificateArn,
   dbAllocatedStorage,
   dbInstanceType,
+  bastionHostIpv4AllowList,
   ingestorDataAccessRoleArn,
   ingestorDomainName,
   jwksUrl,
@@ -70,12 +71,7 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
     dataAccessRoleArn: ingestorDataAccessRoleArn,
     domainName: ingestorDomainName,
     userDataPath: "./userdata.yaml",
-    ipv4AllowList: [
-      "66.17.119.38/32", // Jamison
-      "131.215.220.32/32", // Aimee's home
-      "104.9.124.28/32", // Sean
-      "75.134.157.176/32", // Henry
-    ],
+    ipv4AllowList: bastionHostIpv4AllowList,
     createElasticIp: stage === "prod",
   },
   terminationProtection: false,
