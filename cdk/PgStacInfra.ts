@@ -35,6 +35,7 @@ export class PgStacInfra extends Stack {
       stage,
       version,
       certificateArn,
+      webAclArn,
       pgstacDbConfig,
       titilerPgstacConfig,
       stacApiConfig,
@@ -417,7 +418,7 @@ export class PgStacInfra extends Stack {
               ttl: Duration.seconds(0),
             },
           ],
-          webAclId: stacBrowserConfig.webAclArn,
+          webAclId: webAclArn,
         },
       );
 
@@ -487,6 +488,12 @@ export interface Props extends StackProps {
    * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
    */
   certificateArn?: string | undefined;
+
+  /**
+   * ARN of WAF Web ACL to use for eoAPI custom domains
+   * Example: "arn:aws:wafv2:us-west-2:123456789012:webacl/12345678-1234-1234-1234-123456789012"
+   */
+  webAclArn: string;
 
   pgstacDbConfig: {
     /**
@@ -568,12 +575,6 @@ export interface Props extends StackProps {
      * Example: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
      */
     certificateArn: string;
-
-    /**
-     * ARN of WAF Web ACL to use for eoAPI custom domains
-     * Example: "arn:aws:wafv2:us-west-2:123456789012:webacl/12345678-1234-1234-1234-123456789012"
-     */
-    webAclArn: string;
   };
 
   // === OPTIONAL COMPONENTS ===

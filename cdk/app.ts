@@ -44,6 +44,7 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
   stage,
   version,
   certificateArn,
+  webAclArn,
   pgstacDbConfig: {
     instanceType: dbInstanceType,
     pgstacVersion: pgstacVersion,
@@ -64,7 +65,6 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
     repoTag: stacBrowserRepoTag,
     customDomainName: stacBrowserCustomDomainName,
     certificateArn: stacBrowserCertificateArn,
-    webAclArn,
   },
   ingestorConfig: {
     jwksUrl,
