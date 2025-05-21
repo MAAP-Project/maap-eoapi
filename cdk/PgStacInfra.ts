@@ -43,6 +43,20 @@ export class PgStacInfra extends Stack {
       ingestorConfig,
     } = props;
 
+    const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
+      accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+      removalPolicy: RemovalPolicy.RETAIN,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      bucketName: `maap-logging-${stage}`,
+      enforceSSL: true,
+      lifecycleRules: [
+        {
+          enabled: true,
+          expiration: Duration.days(395),
+        },
+      ],
+    });
+
     // Pgstac Database
     const pgstacDb = new PgStacDatabase(this, "pgstac-db", {
       vpc,
@@ -373,20 +387,6 @@ export class PgStacInfra extends Stack {
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         bucketName: `maap-stac-browser-${stage}`,
         enforceSSL: true,
-      });
-
-      const loggingBucket = new s3.Bucket(this, "maapLoggingBucket", {
-        accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-        removalPolicy: RemovalPolicy.RETAIN,
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        bucketName: `maap-logging-${stage}`,
-        enforceSSL: true,
-        lifecycleRules: [
-          {
-            enabled: true,
-            expiration: Duration.days(395),
-          },
-        ],
       });
 
       const stacBrowserOrigin = new cloudfront.Distribution(
