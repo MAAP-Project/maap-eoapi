@@ -19,76 +19,76 @@ on:
 
 jobs:
   cdk_operations:
-    name: "CDK Operations"
+    name: "cdk operations"
     runs-on: ubuntu-latest
     
     environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_environment || 'synthtest' }}
     
+    env:
+      author: ${{ github.actor }}
+      bastion_host_ipv4_allow_list: ${{ vars.bastion_host_ipv4_allow_list }}
+      certificate_arn: ${{ vars.certificate_arn }}
+      commit_sha: ${{ github.sha }}
+      db_allocated_storage: ${{ vars.db_allocated_storage }}
+      db_instance_type: ${{ vars.db_instance_type }}
+      git_repository: ${{ github.repository }}
+      ingestor_domain_name: ${{ vars.ingestor_domain_name }}
+      mosaic_host: ${{ vars.mosaic_host }}
+      pgstac_version: ${{ vars.pgstac_version }}
+      stac_api_custom_domain_name: ${{ vars.stac_api_custom_domain_name }}
+      stac_api_integration_api_arn: ${{ vars.stac_api_integration_api_arn }}
+      stac_browser_certificate_arn: ${{ vars.stac_browser_certificate_arn }}
+      stac_browser_custom_domain_name: ${{ vars.stac_browser_custom_domain_name }}
+      stac_browser_repo_tag: ${{ vars.stac_browser_repo_tag }}
+      stage: ${{ github.event.inputs.deployment_environment || 'synthtest' }}
+      titiler_data_access_role_arn: ${{ vars.titiler_data_access_role_arn }}
+      titiler_pgstac_api_custom_domain_name: ${{ vars.titiler_pgstac_api_custom_domain_name }}
+      web_acl_arn: ${{ vars.web_acl_arn }}
+    
     steps:
-      - name: Checkout repository
+      - name: checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up node
+      - name: set up node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: install dependencies
         run: npm ci
 
-      # Only assume role for actual deployments, not for synthtest
-      - name: Assume Github OIDC role
+      - name: assume github oidc role
         uses: aws-actions/configure-aws-credentials@v4
         if: github.event_name == 'workflow_dispatch'
         with:
           aws-region: us-west-2
-          role-to-assume: ${{ vars.DEPLOY_ROLE }}
-          role-session-name: MAAP-eoapi-${{ github.event.inputs.deployment_environment || 'synthtest' }}-deploy
+          role-to-assume: ${{ vars.deploy_role }}
+          role-session-name: maap-eoapi-${{ github.event.inputs.deployment_environment || 'synthtest' }}-deploy
 
-      - name: Import stacks variables to github output
+      - name: import stacks variables to github output
         id: import-stacks-vars-to-output
         if: github.event_name == 'workflow_dispatch'
         env:
-          AUTH_STACK_NAME: ${{ vars.AUTH_STACK_NAME }}
-          ROLES_STACK_NAME: ${{ vars.ROLES_STACK_NAME }}
-        run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $AUTH_STACK_NAME $ROLES_STACK_NAME
+          auth_stack_name: ${{ vars.auth_stack_name }}
+          roles_stack_name: ${{ vars.roles_stack_name }}
+        run: bash .github/workflows/scripts/import_stacks_variables_to_github_output.sh $auth_stack_name $roles_stack_name
 
-      - name: Set environment variables
-        id: set-env
+      - name: set dynamic environment variables
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "AUTHOR=${{ github.actor }}" >> $GITHUB_ENV
-          echo "BASTION_HOST_IPV4_ALLOW_LIST=${{ vars.BASTION_HOST_IPV4_ALLOW_LIST }}" >> $GITHUB_ENV
-          echo "CERTIFICATE_ARN=${{ vars.CERTIFICATE_ARN }}" >> $GITHUB_ENV
-          echo "COMMIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
-          echo "DB_ALLOCATED_STORAGE=${{ vars.DB_ALLOCATED_STORAGE }}" >> $GITHUB_ENV
-          echo "DB_INSTANCE_TYPE=${{ vars.DB_INSTANCE_TYPE }}" >> $GITHUB_ENV
-          echo "GIT_REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
-          echo "INGESTOR_DOMAIN_NAME=${{ vars.INGESTOR_DOMAIN_NAME }}" >> $GITHUB_ENV
-          echo "MOSAIC_HOST=${{ vars.MOSAIC_HOST }}" >> $GITHUB_ENV
-          echo "PGSTAC_VERSION=${{ vars.PGSTAC_VERSION }}" >> $GITHUB_ENV
-          echo "STAC_API_CUSTOM_DOMAIN_NAME=${{ vars.STAC_API_CUSTOM_DOMAIN_NAME }}" >> $GITHUB_ENV
-          echo "STAC_API_INTEGRATION_API_ARN=${{ vars.STAC_API_INTEGRATION_API_ARN }}" >> $GITHUB_ENV
-          echo "STAC_BROWSER_CERTIFICATE_ARN=${{ vars.STAC_BROWSER_CERTIFICATE_ARN }}" >> $GITHUB_ENV
-          echo "STAC_BROWSER_CUSTOM_DOMAIN_NAME=${{ vars.STAC_BROWSER_CUSTOM_DOMAIN_NAME }}" >> $GITHUB_ENV
-          echo "STAC_BROWSER_REPO_TAG=${{ vars.STAC_BROWSER_REPO_TAG }}" >> $GITHUB_ENV
-          echo "STAGE=${{ github.event.inputs.deployment_environment || 'synthtest' }}" >> $GITHUB_ENV
-          echo "TITILER_DATA_ACCESS_ROLE_ARN=${{ vars.TITILER_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
-          echo "TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME=${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}" >> $GITHUB_ENV
-          echo "WEB_ACL_ARN=${{ vars.WEB_ACL_ARN }}" >> $GITHUB_ENV
-          
-          # Variables that depend on the output of import-stacks-vars-to-output
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "INGESTOR_DATA_ACCESS_ROLE_ARN=${{ steps.import-stacks-vars-to-output.outputs.INGESTOR_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
-            echo "JWKS_URL=${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}" >> $GITHUB_ENV
-          else
-            echo "INGESTOR_DATA_ACCESS_ROLE_ARN=${{ vars.INGESTOR_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
-            echo "JWKS_URL=${{ vars.JWKS_URL }}" >> $GITHUB_ENV
-          fi
+          echo "ingestor_data_access_role_arn=${{ steps.import-stacks-vars-to-output.outputs.ingestor_data_access_role_arn }}" >> $github_env
+          echo "jwks_url=${{ steps.import-stacks-vars-to-output.outputs.jwks_url }}" >> $github_env
+      
+      - name: set fallback dynamic variables for synthtest
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "ingestor_data_access_role_arn=${{ vars.ingestor_data_access_role_arn }}" >> $github_env
+          echo "jwks_url=${{ vars.jwks_url }}" >> $github_env
 
-      - name: Run CDK synth
+      - name: run cdk synth
         run: npm run cdk -- synth
 
-      - name: Run CDK deploy
+      - name: run cdk deploy
         if: github.event_name == 'workflow_dispatch'
         run: npm run cdk -- deploy --all --require-approval never
