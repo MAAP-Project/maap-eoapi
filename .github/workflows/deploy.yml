@@ -85,6 +85,8 @@ jobs:
         run: |
           echo "INGESTOR_DATA_ACCESS_ROLE_ARN=${{ vars.INGESTOR_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
           echo "JWKS_URL=${{ vars.JWKS_URL }}" >> $GITHUB_ENV
+          echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=us-west-2" >> $GITHUB_ENV
 
       - name: Run CDK synth
         run: npm run cdk -- synth

@@ -5,6 +5,7 @@ import * as cdk from "aws-cdk-lib";
 import { Vpc } from "./Vpc";
 import { Config } from "./config";
 import { PgStacInfra } from "./PgStacInfra";
+import { MaapEoapiCommon } from "./MaapEoapiCommon";
 
 const {
   buildStackName,
@@ -38,13 +39,22 @@ const { vpc } = new Vpc(app, buildStackName("vpc"), {
   natGatewayCount: stage === "prod" ? undefined : 1,
 });
 
+// Create common resources to be shared by pgSTAC and userSTAC stacks
+const common = new MaapEoapiCommon(app, buildStackName("common"), {
+  tags,
+  stage,
+  terminationProtection: false,
+});
+
 new PgStacInfra(app, buildStackName("pgSTAC"), {
   vpc,
   tags,
   stage,
+  type: "public",
   version,
   certificateArn,
   webAclArn,
+  loggingBucketArn: common.loggingBucket.bucketArn,
   pgstacDbConfig: {
     instanceType: dbInstanceType,
     pgstacVersion: pgstacVersion,
@@ -74,5 +84,36 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
     ipv4AllowList: bastionHostIpv4AllowList,
     createElasticIp: stage === "prod",
   },
+  terminationProtection: false,
+});
+
+new PgStacInfra(app, buildStackName("userSTAC"), {
+  vpc,
+  tags,
+  stage,
+  type: "internal",
+  version,
+  webAclArn,
+  loggingBucketArn: common.loggingBucket.bucketArn,
+  pgstacDbConfig: {
+    instanceType: dbInstanceType,
+    pgstacVersion: pgstacVersion,
+    allocatedStorage: dbAllocatedStorage,
+    subnetPublic: false,
+  },
+  stacApiConfig: {
+    // customDomainName: stacApiCustomDomainName,
+  },
+  titilerPgstacConfig: {
+    mosaicHost,
+    bucketsPath: "./titiler_buckets.yaml",
+    // customDomainName: titilerPgStacApiCustomDomainName,
+    dataAccessRoleArn: titilerDataAccessRoleArn,
+  },
+  // stacBrowserConfig: {
+  //   repoTag: stacBrowserRepoTag,
+  //   customDomainName: stacBrowserCustomDomainName,
+  //   certificateArn: stacBrowserCertificateArn,
+  // },
   terminationProtection: false,
 });
