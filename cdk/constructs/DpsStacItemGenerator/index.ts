@@ -185,7 +185,6 @@ export class DpsStacItemGenerator extends Construct {
       }),
       memorySize: props.memorySize ?? 1024,
       timeout: Duration.seconds(timeoutSeconds),
-      reservedConcurrentExecutions: batchSize,
       logRetention: logs.RetentionDays.ONE_WEEK,
       environment: {
         ITEM_LOAD_TOPIC_ARN: props.itemLoadTopicArn,
