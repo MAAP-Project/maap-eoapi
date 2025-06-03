@@ -46,7 +46,7 @@ export class PgStacInfra extends Stack {
       stacBrowserConfig,
       ingestorConfig,
       loggingBucketArn,
-      itemGenConfig,
+      dpsStacItemGenConfig: itemGenConfig,
     } = props;
 
     // Pgstac Database
@@ -501,6 +501,7 @@ export class PgStacInfra extends Stack {
           {
             itemLoadTopicArn: stacItemLoader.topic.topicArn,
             roleArn: itemGenConfig.itemGenRoleArn,
+            allowedAccountBucketPairs: itemGenConfig.allowedAccountBucketPairs,
             vpc,
             subnetSelection: apiSubnetSelection,
           },
@@ -667,7 +668,8 @@ export interface Props extends StackProps {
      */
     createElasticIp?: boolean;
   };
-  itemGenConfig?: {
+  dpsStacItemGenConfig?: {
     itemGenRoleArn?: string | undefined;
+    allowedAccountBucketPairs?: Array<{accountId: string; bucketArn: string}> | undefined;
   };
 }
