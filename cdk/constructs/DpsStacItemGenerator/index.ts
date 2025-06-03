@@ -175,7 +175,7 @@ export class DpsStacItemGenerator extends Construct {
     this.lambdaFunction = new lambda.Function(this, "Function", {
       runtime: lambdaRuntime,
       role: Role.fromRoleArn(this, "dps-item-gen-role", props.roleArn),
-      handler: "handler.handler",
+      handler: "dps_stac_item_generator.handler.handler",
       code: lambda.Code.fromDockerBuild(__dirname, {
         file: "runtime/Dockerfile",
         platform: "linux/amd64",
