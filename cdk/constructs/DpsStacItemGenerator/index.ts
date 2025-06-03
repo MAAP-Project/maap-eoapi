@@ -1,5 +1,6 @@
 import {
   aws_ec2 as ec2,
+  aws_iam as iam,
   aws_lambda as lambda,
   aws_sqs as sqs,
   aws_sns as sns,
@@ -89,6 +90,16 @@ export interface DpsStacItemGeneratorProps {
    */
   readonly itemLoadTopicArn: string;
 
+  /**
+   * Array of account ID and bucket ARN pairs that are allowed to publish.
+   *
+   * Format: [{accountId: "123456789012", bucketArn: "arn:aws:s3:::bucket-name"}, ...]
+   * 
+   * This provides fine-grained control ensuring only specific buckets from
+   * specific accounts can trigger item generation, preventing cross-account
+   * privilege escalation.
+   */
+  readonly allowedAccountBucketPairs?: Array<{accountId: string; bucketArn: string}>;
   readonly roleArn: string;
 }
 
@@ -149,6 +160,9 @@ export class DpsStacItemGenerator extends Construct {
     this.topic = new sns.Topic(this, "Topic", {
       displayName: `${id}-ItemGenTopic`,
     });
+
+    // Add cross-account access policies
+    this.configureCrossAccountAccess(props);
 
     // Subscribe the queue to the topic
     this.topic.addSubscription(
@@ -214,5 +228,27 @@ export class DpsStacItemGenerator extends Construct {
       description: "Name of the DpsStacItemGenerator Lambda Function",
       exportName: "dps-stac-item-generator-function-name",
     });
+  }
+
+  private configureCrossAccountAccess(props: DpsStacItemGeneratorProps) {
+    if (props.allowedAccountBucketPairs?.length) {
+      props.allowedAccountBucketPairs.forEach((pair, index) => {
+        this.topic.addToResourcePolicy(
+          new iam.PolicyStatement({
+            sid: `AllowAccountBucketPair${index}Publish`,
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal("s3.amazonaws.com")],
+            actions: ["SNS:Publish"],
+            resources: [this.topic.topicArn],
+            conditions: {
+              StringEquals: {
+                "aws:SourceArn": pair.bucketArn,
+                "aws:SourceAccount": pair.accountId,
+              },
+            },
+          }),
+        );
+      });
+    }
   }
 }

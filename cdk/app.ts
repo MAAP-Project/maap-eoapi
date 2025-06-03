@@ -27,6 +27,7 @@ const {
   tags,
   titilerDataAccessRoleArn,
   titilerPgStacApiCustomDomainName,
+  userStacAllowedPublisherAccountBucketPairs,
   userStacItemGenRoleArn,
   version,
   webAclArn,
@@ -117,7 +118,8 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
   //   certificateArn: stacBrowserCertificateArn,
   // },
   terminationProtection: false,
-  itemGenConfig: {
+  dpsStacItemGenConfig: {
     itemGenRoleArn: userStacItemGenRoleArn,
+    allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
   },
 });
