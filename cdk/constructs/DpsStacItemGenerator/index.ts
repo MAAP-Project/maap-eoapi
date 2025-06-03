@@ -26,10 +26,6 @@ export interface DpsStacItemGeneratorProps {
   /**
    * The lambda runtime to use for the item generation function.
    *
-   * The function is containerized using Docker and can accommodate various
-   * stactools packages. The runtime version should be compatible with the
-   * packages you plan to use for STAC item generation.
-   *
    * @default lambda.Runtime.PYTHON_3_11
    */
   readonly lambdaRuntime?: lambda.Runtime;
@@ -37,9 +33,6 @@ export interface DpsStacItemGeneratorProps {
   /**
    * The timeout for the item generation lambda in seconds.
    *
-   * This should accommodate the time needed to:
-   * - Install stactools packages using uvx
-   * - Download and process source data
    * - Generate STAC metadata
    * - Publish results to SNS
    *
@@ -51,10 +44,6 @@ export interface DpsStacItemGeneratorProps {
 
   /**
    * Memory size for the lambda function in MB.
-   *
-   * Higher memory allocation may be needed for processing large geospatial
-   * datasets or when stactools packages have high memory requirements.
-   * More memory also provides proportionally more CPU power.
    *
    * @default 1024
    */
@@ -117,8 +106,7 @@ export class DpsStacItemGenerator extends Construct {
    * Dead letter queue for failed item generation attempts.
    *
    * Messages that fail processing after 5 attempts are sent here for
-   * inspection and potential replay. This helps with debugging stactools
-   * package issues, network failures, or malformed requests.
+   * inspection and potential replay. This helps with debugging.
    */
   public readonly deadLetterQueue: sqs.Queue;
 
@@ -205,26 +193,26 @@ export class DpsStacItemGenerator extends Construct {
     // Create outputs
     new CfnOutput(this, "TopicArn", {
       value: this.topic.topicArn,
-      description: "ARN of the StactoolsItemGenerator SNS Topic",
-      exportName: "stactools-item-generator-topic-arn",
+      description: "ARN of the DpsStacItemGenerator SNS Topic",
+      exportName: "dps-stac-item-generator-topic-arn",
     });
 
     new CfnOutput(this, "QueueUrl", {
       value: this.queue.queueUrl,
-      description: "URL of the StactoolsItemGenerator SQS Queue",
-      exportName: "stactools-item-generator-queue-url",
+      description: "URL of the DpsStacItemGenerator SQS Queue",
+      exportName: "dps-stac-item-generator-queue-url",
     });
 
     new CfnOutput(this, "DeadLetterQueueUrl", {
       value: this.deadLetterQueue.queueUrl,
-      description: "URL of the StactoolsItemGenerator Dead Letter Queue",
-      exportName: "stactools-item-generator-deadletter-queue-url",
+      description: "URL of the DpsStacItemGenerator Dead Letter Queue",
+      exportName: "dps-stac-item-generator-deadletter-queue-url",
     });
 
     new CfnOutput(this, "FunctionName", {
       value: this.lambdaFunction.functionName,
-      description: "Name of the StactoolsItemGenerator Lambda Function",
-      exportName: "stactools-item-generator-function-name",
+      description: "Name of the DpsStacItemGenerator Lambda Function",
+      exportName: "dps-stac-item-generator-function-name",
     });
   }
 }
