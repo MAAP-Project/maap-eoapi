@@ -134,7 +134,7 @@ def handler(
                     f"[{message_id}] SNS publish response MessageId: {response.get('MessageId')}"
                 )
 
-            logger.debug(f"[{message_id}] Successfully processed.")
+            logger.info(f"[{message_id}] Successfully processed.")
 
         except (ValueError, KeyError, ValidationError, json.JSONDecodeError) as e:
             logger.error(f"[{message_id}] Failed with error: {e}", extra=record)

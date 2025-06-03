@@ -50,13 +50,16 @@ def get_stac_items(catalog_json_key: str) -> Generator[Item, Any, Any]:
     parsed = urlparse(catalog_json_key)
 
     # get username out of s3 key
-    collection_id = parsed.path.split("/")[0]
+    collection_id = parsed.path.split("/")[1]
 
     catalog = pystac.Catalog.from_file(catalog_json_key)
     catalog.make_all_asset_hrefs_absolute()
 
-    for item in catalog.get_all_collections():
+    for item in catalog.get_all_items():
         item.validate()
 
-        # add collection at end because pystac won't like having collection set without a link
-        yield Item(**item.to_dict(), collection=collection_id)
+        # Convert item to dict and override collection ID
+        item_dict = item.to_dict()
+        item_dict["collection"] = collection_id
+        
+        yield Item(**item_dict)
