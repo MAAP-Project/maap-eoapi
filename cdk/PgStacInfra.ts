@@ -467,6 +467,8 @@ export class PgStacInfra extends Stack {
       // item loader
       const stacItemLoader = new StacItemLoader(this, "stac-item-loader", {
         pgstacDb,
+        vpc: vpc,
+        subnetSelection: apiSubnetSelection,
         batchSize: 500,
         lambdaTimeoutSeconds: 300,
       });
@@ -485,6 +487,8 @@ export class PgStacInfra extends Stack {
         "stactools-item-generator",
         {
           itemLoadTopicArn: stacItemLoader.topic.topicArn,
+          vpc,
+          subnetSelection: apiSubnetSelection,
         },
       );
 
@@ -497,6 +501,8 @@ export class PgStacInfra extends Stack {
           {
             itemLoadTopicArn: stacItemLoader.topic.topicArn,
             roleArn: itemGenConfig.itemGenRoleArn,
+            vpc,
+            subnetSelection: apiSubnetSelection,
           },
         );
 
