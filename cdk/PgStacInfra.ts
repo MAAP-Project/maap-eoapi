@@ -20,9 +20,12 @@ import {
   StacIngestor,
   TitilerPgstacApiLambda,
   StacBrowser,
+  StacItemLoader,
+  StactoolsItemGenerator,
 } from "eoapi-cdk";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
+import { DpsStacItemGenerator } from "./constructs/DpsStacItemGenerator";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -43,6 +46,7 @@ export class PgStacInfra extends Stack {
       stacBrowserConfig,
       ingestorConfig,
       loggingBucketArn,
+      itemGenConfig,
     } = props;
 
     // Pgstac Database
@@ -458,6 +462,47 @@ export class PgStacInfra extends Stack {
         }),
       );
     }
+
+    if (itemGenConfig) {
+      // item loader
+      const stacItemLoader = new StacItemLoader(this, "stac-item-loader", {
+        pgstacDb,
+        batchSize: 500,
+        lambdaTimeoutSeconds: 300,
+      });
+
+      pgstacDb.pgstacSecret.grantRead(stacItemLoader.lambdaFunction);
+
+      stacItemLoader.lambdaFunction.connections.allowTo(
+        pgstacDb.connectionTarget,
+        ec2.Port.tcp(5432),
+        "allow connections from stac-item-loader",
+      );
+
+      // item item generators
+      const stactoolsItemGenerator = new StactoolsItemGenerator(
+        this,
+        "stactools-item-generator",
+        {
+          itemLoadTopicArn: stacItemLoader.topic.topicArn,
+        },
+      );
+
+      stacItemLoader.topic.grantPublish(stactoolsItemGenerator.lambdaFunction);
+
+      if (itemGenConfig.itemGenRoleArn) {
+        const dpsStacItemGenerator = new DpsStacItemGenerator(
+          this,
+          "dps-item-generator",
+          {
+            itemLoadTopicArn: stacItemLoader.topic.topicArn,
+            roleArn: itemGenConfig.itemGenRoleArn,
+          },
+        );
+
+        stacItemLoader.topic.grantPublish(dpsStacItemGenerator.lambdaFunction);
+      }
+    }
   }
 }
 
@@ -615,5 +660,8 @@ export interface Props extends StackProps {
      * Flag to control whether the Bastion Host should make a non-dynamic elastic IP.
      */
     createElasticIp?: boolean;
+  };
+  itemGenConfig?: {
+    itemGenRoleArn?: string | undefined;
   };
 }
