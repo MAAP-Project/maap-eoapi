@@ -1,4 +1,5 @@
 import {
+  aws_ec2 as ec2,
   aws_lambda as lambda,
   aws_sqs as sqs,
   aws_sns as sns,
@@ -9,10 +10,19 @@ import {
   CfnOutput,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import * as path from "path";
 import { Role } from "aws-cdk-lib/aws-iam";
 
 export interface DpsStacItemGeneratorProps {
+  /**
+   * VPC into which the lambda should be deployed.
+   */
+  readonly vpc?: ec2.IVpc;
+
+  /**
+   * Subnet into which the lambda should be deployed.
+   */
+  readonly subnetSelection?: ec2.SubnetSelection;
+
   /**
    * The lambda runtime to use for the item generation function.
    *
