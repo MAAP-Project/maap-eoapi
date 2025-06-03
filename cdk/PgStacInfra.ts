@@ -471,6 +471,9 @@ export class PgStacInfra extends Stack {
         subnetSelection: apiSubnetSelection,
         batchSize: 500,
         lambdaTimeoutSeconds: 300,
+        environment: {
+          CREATE_COLLECTIONS_IF_MISSING: "TRUE",
+        },
       });
 
       pgstacDb.pgstacSecret.grantRead(stacItemLoader.lambdaFunction);
@@ -670,6 +673,8 @@ export interface Props extends StackProps {
   };
   dpsStacItemGenConfig?: {
     itemGenRoleArn?: string | undefined;
-    allowedAccountBucketPairs?: Array<{accountId: string; bucketArn: string}> | undefined;
+    allowedAccountBucketPairs?:
+      | Array<{ accountId: string; bucketArn: string }>
+      | undefined;
   };
 }
