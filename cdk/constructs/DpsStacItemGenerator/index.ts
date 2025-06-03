@@ -94,12 +94,15 @@ export interface DpsStacItemGeneratorProps {
    * Array of account ID and bucket ARN pairs that are allowed to publish.
    *
    * Format: [{accountId: "123456789012", bucketArn: "arn:aws:s3:::bucket-name"}, ...]
-   * 
+   *
    * This provides fine-grained control ensuring only specific buckets from
    * specific accounts can trigger item generation, preventing cross-account
    * privilege escalation.
    */
-  readonly allowedAccountBucketPairs?: Array<{accountId: string; bucketArn: string}>;
+  readonly allowedAccountBucketPairs?: Array<{
+    accountId: string;
+    bucketArn: string;
+  }>;
   readonly roleArn: string;
 }
 
@@ -243,7 +246,7 @@ export class DpsStacItemGenerator extends Construct {
             conditions: {
               StringEquals: {
                 "aws:SourceArn": pair.bucketArn,
-                "aws:SourceAccount": pair.accountId,
+                // "aws:SourceAccount": pair.accountId,
               },
             },
           }),
