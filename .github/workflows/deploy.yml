@@ -43,6 +43,7 @@ jobs:
       STAGE: ${{ github.event.inputs.deployment_environment || 'synthtest' }}
       TITILER_DATA_ACCESS_ROLE_ARN: ${{ vars.TITILER_DATA_ACCESS_ROLE_ARN }}
       TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
+      USER_STAC_ITEM_GEN_ROLE_ARN: ${{ vars.USER_STAC_ITEM_GEN_ROLE_ARN }}
       WEB_ACL_ARN: ${{ vars.WEB_ACL_ARN }}
     
     steps:

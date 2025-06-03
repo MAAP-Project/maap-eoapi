@@ -21,6 +21,7 @@ export class Config {
   readonly pgstacVersion: string;
   readonly webAclArn: string;
   readonly bastionHostIpv4AllowList: string[];
+  readonly userStacItemGenRoleArn: string;
 
   constructor() {
     // These are required environment variables and cannot be undefined
@@ -126,6 +127,8 @@ export class Config {
 
       this.bastionHostIpv4AllowList = Object.values(parsedConfig);
     }
+
+    this.userStacItemGenRoleArn = process.env.USER_STAC_ITEM_GEN_ROLE_ARN!;
   }
 
   /**
