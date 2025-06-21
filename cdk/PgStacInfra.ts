@@ -9,6 +9,8 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_cloudwatch as cloudwatch,
+  aws_apigatewayv2_integrations,
+  CfnOutput,
 } from "aws-cdk-lib";
 import { Aws, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
@@ -120,8 +122,10 @@ export class PgStacInfra extends Stack {
     const titilerPgstacLambdaOptions: CustomLambdaFunctionProps = {
       code: lambda.Code.fromDockerBuild(__dirname, {
         file: "dockerfiles/Dockerfile.raster",
-        buildArgs: { PYTHON_VERSION: "3.11" },
+        buildArgs: { PYTHON_VERSION: "3.12" },
       }),
+      snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
+      runtime: lambda.Runtime.PYTHON_3_12,
       role: titilerDataAccessRole,
     };
 
@@ -166,6 +170,9 @@ export class PgStacInfra extends Stack {
       },
     );
 
+    const titilerPgstacFnVersion =
+      titilerPgstacApi.titilerPgstacLambdaFunction.currentVersion;
+
     if (titilerPgstacConfig.mosaicHost) {
       // Add dynamodb permissions to the titiler-pgstac Lambda for mosaicjson support
       const tableName = titilerPgstacConfig.mosaicHost.split("/", 2)[1];
@@ -204,6 +211,28 @@ export class PgStacInfra extends Stack {
       ec2.Port.tcp(5432),
       "allow connections from titiler",
     );
+
+    const altTitilerApi = new apigatewayv2.HttpApi(
+      this,
+      `${Stack.of(this).stackName}-titiler-pgstac-alt-api`,
+      {
+        defaultIntegration:
+          new aws_apigatewayv2_integrations.HttpLambdaIntegration(
+            "integration",
+            titilerPgstacFnVersion,
+          ),
+      },
+    );
+
+    const apiUrl = altTitilerApi.url;
+    if (typeof apiUrl !== "string") {
+      throw new Error("Expected API URL to be a string");
+    }
+
+    new CfnOutput(this, "alt-titiler-pgstac-api-output", {
+      exportName: `${Stack.of(this).stackName}-alt-titiler-pgstac-url`,
+      value: apiUrl,
+    });
 
     // API logging dashboard
 
