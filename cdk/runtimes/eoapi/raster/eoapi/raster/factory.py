@@ -416,8 +416,8 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 with self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
-                    reader_options=reader_params.to_dict(),
-                    **backend_params.to_dict(),
+                    reader_options=reader_params.as_dict(),
+                    **backend_params.as_dict(),
                 ) as src_dst:
                     bounds = src_dst.bounds
                     minzoom = minzoom if minzoom is not None else src_dst.minzoom
@@ -481,15 +481,15 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 with self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
-                    reader_options=reader_params.to_dict(),
-                    **backend_params.to_dict(),
+                    reader_options=reader_params.as_dict(),
+                    **backend_params.as_dict(),
                 ) as src_dst:
                     values = src_dst.point(
                         lon,
                         lat,
                         threads=threads,
-                        **layer_params.to_dict(),
-                        **dataset_params.to_dict(),
+                        **layer_params.as_dict(),
+                        **dataset_params.as_dict(),
                     )
 
             return {
