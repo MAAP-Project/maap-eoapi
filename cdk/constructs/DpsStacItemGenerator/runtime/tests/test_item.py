@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pystac
 import pytest
 from dps_stac_item_generator.item import get_stac_items
+from pystac.errors import STACValidationError
 from stac_pydantic.item import Item
 
 
@@ -255,3 +256,47 @@ class TestGetStacItems:
 
             mock_catalog.make_all_asset_hrefs_absolute.assert_called_once()
             mock_catalog.get_all_items.assert_called_once()
+
+    def test_get_stac_items_stac_validation_error(
+        self, mock_catalog, mock_job_metadata
+    ):
+        """Test handling of STACValidationError during item validation."""
+        catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
+
+        items = mock_catalog.get_all_items.return_value
+        validation_error_msg = "Item does not conform to STAC specification"
+        items[0].validate.side_effect = STACValidationError(validation_error_msg)
+
+        with (
+            patch(
+                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                return_value=mock_catalog,
+            ),
+            patch(
+                "dps_stac_item_generator.item.load_met_json",
+                return_value=mock_job_metadata,
+            ),
+        ):
+            with pytest.raises(STACValidationError, match=validation_error_msg):
+                list(get_stac_items(catalog_s3_key))
+
+            items[0].validate.assert_called_once()
+
+    def test_get_stac_items_invalid_catalog_json(self, mock_job_metadata):
+        """Test handling of invalid catalog.json file."""
+        catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
+
+        with (
+            patch(
+                "dps_stac_item_generator.item.load_met_json",
+                return_value=mock_job_metadata,
+            ),
+            patch(
+                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                side_effect=Exception("Failed to parse catalog.json: invalid format"),
+            ),
+        ):
+            with pytest.raises(
+                Exception, match="Failed to parse catalog.json: invalid format"
+            ):
+                list(get_stac_items(catalog_s3_key))
