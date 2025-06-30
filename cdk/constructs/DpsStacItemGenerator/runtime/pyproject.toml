@@ -7,7 +7,7 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "boto3>=1.38.28",
+    "obstore>=0.7.0",
     "pydantic>=2.11.0",
     "pystac[validation]>=1.13.0",
     "stac-pydantic>=3.2.0",
