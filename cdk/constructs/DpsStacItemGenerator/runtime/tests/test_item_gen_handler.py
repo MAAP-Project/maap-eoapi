@@ -45,7 +45,6 @@ def mock_sns_client(mocker):
 @pytest.fixture
 def mock_get_stac_items(mocker):
     """Mock the get_stac_items function."""
-    # Create a realistic-looking mock Item object
     mock_item_dict = {
         "type": "Feature",
         "stac_version": "1.0.0",
@@ -62,12 +61,10 @@ def mock_get_stac_items(mocker):
     }
     mock_item = Item(**mock_item_dict)
 
-    # Patch the function to return our mock item as a generator
     mock_func = patch(
         "dps_stac_item_generator.handler.get_stac_items", return_value=[mock_item]
     ).start()
 
-    # Store the mock item for easy access
     mock_func.mock_item = mock_item
     mock_func.mock_item_dict = mock_item_dict
     mock_func.mock_item_json = mock_item.model_dump_json()
@@ -77,14 +74,10 @@ def mock_get_stac_items(mocker):
     mock_func.stop()
 
 
-# --- Helper Function ---
-
-
 def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
     """Helper function to create an SQS event structure with S3 notifications."""
     records = []
     for i, s3_event_data in enumerate(s3_events):
-        # Create S3 event notification structure
         s3_notification = {
             "Records": [
                 {
@@ -98,7 +91,6 @@ def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
             ]
         }
 
-        # Wrap in SNS notification
         sns_message_str = json.dumps(s3_notification)
         sns_notification = {
             "Type": "Notification",
@@ -110,7 +102,6 @@ def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
             "SignatureVersion": "1",
         }
 
-        # Wrap in SQS record
         sqs_body_str = json.dumps(sns_notification)
         records.append(
             {
@@ -133,14 +124,10 @@ def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
     return {"Records": records}
 
 
-# --- Test Cases ---
-
-
 def test_handler_success_single_message(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test successful processing of a single valid SQS message with S3 catalog.json event."""
-    # Arrange
     caplog.set_level(logging.INFO)
     s3_event_data = {
         "bucket": {"name": "test-catalog-bucket"},
@@ -150,22 +137,17 @@ def test_handler_success_single_message(
 
     expected_s3_uri = "s3://test-catalog-bucket/path/to/catalog.json"
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
-    assert result is None  # Successful batch processing returns None
+    assert result is None
 
-    # Check get_stac_items call
     mock_get_stac_items.assert_called_once_with(expected_s3_uri)
 
-    # Check SNS publish call
     mock_sns_client.publish.assert_called_once_with(
         TopicArn=os.environ["ITEM_LOAD_TOPIC_ARN"],
         Message=mock_get_stac_items.mock_item_json,
     )
 
-    # Check logs
     assert "Received batch with 1 records." in caplog.text
     assert f"Publishing STAC item {mock_get_stac_items.mock_item.id}" in caplog.text
     assert "SNS publish response MessageId: fake-sns-message-id" in caplog.text
@@ -177,7 +159,6 @@ def test_handler_success_multiple_messages(
     mock_context, mock_sns_client, mock_get_stac_items, mocker, caplog
 ):
     """Test successful processing of multiple valid SQS messages with S3 catalog.json events."""
-    # Arrange
     s3_event_data1 = {
         "bucket": {"name": "test-catalog-bucket-1"},
         "object": {"key": "path1/catalog.json"},
@@ -188,7 +169,6 @@ def test_handler_success_multiple_messages(
     }
     event = create_sqs_event_with_s3_notification([s3_event_data1, s3_event_data2])
 
-    # Configure mock to return different items for each call
     item1_dict = {**mock_get_stac_items.mock_item_dict, "id": "item1"}
     item2_dict = {**mock_get_stac_items.mock_item_dict, "id": "item2"}
 
@@ -200,22 +180,18 @@ def test_handler_success_multiple_messages(
 
     mock_get_stac_items.side_effect = [[item1], [item2]]
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     assert result is None
     assert mock_get_stac_items.call_count == 2
     assert mock_sns_client.publish.call_count == 2
 
-    # Check get_stac_items calls
     expected_calls = [
         mocker.call("s3://test-catalog-bucket-1/path1/catalog.json"),
         mocker.call("s3://test-catalog-bucket-2/path2/catalog.json"),
     ]
     mock_get_stac_items.assert_has_calls(expected_calls)
 
-    # Check publish calls
     assert mock_sns_client.publish.call_args_list[0] == mocker.call(
         TopicArn=os.environ["ITEM_LOAD_TOPIC_ARN"], Message=item1_json
     )
@@ -232,7 +208,6 @@ def test_handler_partial_failure_get_stac_items(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test partial batch failure when get_stac_items raises an error."""
-    # Arrange
     s3_event_data_ok = {
         "bucket": {"name": "test-catalog-bucket-ok"},
         "object": {"key": "ok/catalog.json"},
@@ -245,7 +220,6 @@ def test_handler_partial_failure_get_stac_items(
         [s3_event_data_ok, s3_event_data_fail]
     )
 
-    # Set up mock to succeed for first call and fail for second
     mock_item_ok_dict = {
         **mock_get_stac_items.mock_item_dict,
         "id": "item_ok",
@@ -253,25 +227,20 @@ def test_handler_partial_failure_get_stac_items(
     mock_item_ok = Item(**mock_item_ok_dict)
     mock_item_ok_json = mock_item_ok.model_dump_json()
 
-    # Simulate error during STAC item generation
     mock_exception = ValueError("Failed to generate STAC items from catalog")
 
     mock_get_stac_items.side_effect = [[mock_item_ok], mock_exception]
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [{"itemIdentifier": event["Records"][1]["messageId"]}]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check calls
     assert mock_get_stac_items.call_count == 2
     mock_sns_client.publish.assert_called_once_with(
         TopicArn=os.environ["ITEM_LOAD_TOPIC_ARN"], Message=mock_item_ok_json
     )
 
-    # Check logs
     assert (
         f"[{event['Records'][0]['messageId']}] Successfully processed." in caplog.text
     )
@@ -286,15 +255,13 @@ def test_handler_partial_failure_json_decode(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test partial batch failure when JSON decoding fails."""
-    # Arrange
     s3_event_data_ok = {
         "bucket": {"name": "test-catalog-bucket-ok"},
         "object": {"key": "ok/catalog.json"},
     }
-    invalid_json_body = '{"Message": "{"Records": [{"s3": {"bucket": {"name": "test"}, "object": {"key": "catalog.json"}}]", "Type": "Notification"}'  # Invalid JSON
+    invalid_json_body = '{"Message": "{"Records": [{"s3": {"bucket": {"name": "test"}, "object": {"key": "catalog.json"}}]", "Type": "Notification"}'
 
     event = create_sqs_event_with_s3_notification([s3_event_data_ok])
-    # Add malformed record
     malformed_record = {
         "messageId": "sqs-msg-id-malformed",
         "receiptHandle": "receipt-handle-malformed",
@@ -308,7 +275,6 @@ def test_handler_partial_failure_json_decode(
     }
     event["Records"].append(malformed_record)
 
-    # Configure mock for good record
     mock_item_ok_dict = {
         **mock_get_stac_items.mock_item_dict,
         "id": "item_ok",
@@ -317,20 +283,16 @@ def test_handler_partial_failure_json_decode(
     mock_item_ok_json = mock_item_ok.model_dump_json()
     mock_get_stac_items.return_value = [mock_item_ok]
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [{"itemIdentifier": malformed_record["messageId"]}]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check calls
     mock_get_stac_items.assert_called_once()
     mock_sns_client.publish.assert_called_once_with(
         TopicArn=os.environ["ITEM_LOAD_TOPIC_ARN"], Message=mock_item_ok_json
     )
 
-    # Check logs - the actual error message will vary based on the JSON parsing failure
     assert f"[{malformed_record['messageId']}] Failed with error:" in caplog.text
 
 
@@ -338,39 +300,33 @@ def test_handler_partial_failure_invalid_s3_key(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test partial batch failure when S3 object key is not catalog.json."""
-    # Arrange
     s3_event_data_ok = {
         "bucket": {"name": "test-catalog-bucket-ok"},
         "object": {"key": "ok/catalog.json"},
     }
     s3_event_data_invalid = {
         "bucket": {"name": "test-catalog-bucket-invalid"},
-        "object": {"key": "invalid/catalog-not.json"},  # Invalid filename
+        "object": {"key": "invalid/catalog-not.json"},
     }
     event = create_sqs_event_with_s3_notification(
         [s3_event_data_ok, s3_event_data_invalid]
     )
 
-    # Configure mock for good record
     mock_item_ok_dict = {**mock_get_stac_items.mock_item_dict, "id": "item_ok"}
     mock_item_ok = Item(**mock_item_ok_dict)
     mock_item_ok_json = mock_item_ok.model_dump_json()
     mock_get_stac_items.return_value = [mock_item_ok]
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [{"itemIdentifier": event["Records"][1]["messageId"]}]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check calls - only called once for the valid record
     mock_get_stac_items.assert_called_once()
     mock_sns_client.publish.assert_called_once_with(
         TopicArn=os.environ["ITEM_LOAD_TOPIC_ARN"], Message=mock_item_ok_json
     )
 
-    # Check logs
     assert (
         f"[{event['Records'][1]['messageId']}] Failed with error: S3 object key does not appear to be a catalog.json: invalid/catalog-not.json"
         in caplog.text
@@ -381,32 +337,27 @@ def test_handler_all_records_fail(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test when all records in a batch fail."""
-    # Arrange - both S3 events have invalid object keys
     s3_event_data_1 = {
         "bucket": {"name": "test-catalog-bucket-1"},
-        "object": {"key": "file1.tif"},  # Not catalog.json
+        "object": {"key": "file1.tif"},  # not a catalog.json
     }
     s3_event_data_2 = {
         "bucket": {"name": "test-catalog-bucket-2"},
-        "object": {"key": "file2.json"},  # Not catalog.json
+        "object": {"key": "file2.json"},  # not a catalog.json
     }
     event = create_sqs_event_with_s3_notification([s3_event_data_1, s3_event_data_2])
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [
         {"itemIdentifier": event["Records"][0]["messageId"]},
         {"itemIdentifier": event["Records"][1]["messageId"]},
     ]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check calls - should never call these since validation fails
     mock_get_stac_items.assert_not_called()
     mock_sns_client.publish.assert_not_called()
 
-    # Check logs
     assert "Finished processing batch. 2 failure(s) reported." in caplog.text
 
 
@@ -414,13 +365,10 @@ def test_handler_empty_batch(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test handling an empty batch of records."""
-    # Arrange
     event = {"Records": []}
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     assert result is None
     mock_get_stac_items.assert_not_called()
     mock_sns_client.publish.assert_not_called()
@@ -432,7 +380,6 @@ def test_handler_with_general_exception(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test handling of unexpected exceptions during processing."""
-    # Arrange
     s3_event_data = {
         "bucket": {"name": "test-catalog-bucket"},
         "object": {"key": "path/catalog.json"},
@@ -440,17 +387,13 @@ def test_handler_with_general_exception(
     event = create_sqs_event_with_s3_notification([s3_event_data])
     message_id = event["Records"][0]["messageId"]
 
-    # Set up mock to raise an unexpected exception
     mock_get_stac_items.side_effect = Exception("Unexpected error during processing")
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [{"itemIdentifier": message_id}]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check logs
     assert (
         f"[{message_id}] Unexpected error: Unexpected error during processing"
         in caplog.text
@@ -462,24 +405,19 @@ def test_handler_sns_publish_failure(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test handling of SNS publish failures."""
-    # Arrange
     s3_event_data = {
         "bucket": {"name": "test-catalog-bucket"},
         "object": {"key": "path/catalog.json"},
     }
     event = create_sqs_event_with_s3_notification([s3_event_data])
 
-    # Configure mock to simulate SNS publish failure
     mock_sns_client.publish.side_effect = Exception("SNS publish failed")
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [{"itemIdentifier": event["Records"][0]["messageId"]}]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check logs
     assert "SNS publish failed" in caplog.text
     assert (
         f"[{event['Records'][0]['messageId']}] Unexpected error: SNS publish failed"
@@ -491,14 +429,12 @@ def test_handler_multiple_items_from_catalog(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test processing when get_stac_items returns multiple items from a single catalog."""
-    # Arrange
     s3_event_data = {
         "bucket": {"name": "test-catalog-bucket"},
         "object": {"key": "path/catalog.json"},
     }
     event = create_sqs_event_with_s3_notification([s3_event_data])
 
-    # Create multiple mock items
     item1_dict = {**mock_get_stac_items.mock_item_dict, "id": "item1"}
     item2_dict = {**mock_get_stac_items.mock_item_dict, "id": "item2"}
     item3_dict = {**mock_get_stac_items.mock_item_dict, "id": "item3"}
@@ -509,15 +445,12 @@ def test_handler_multiple_items_from_catalog(
 
     mock_get_stac_items.return_value = [item1, item2, item3]
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     assert result is None
     assert mock_get_stac_items.call_count == 1
     assert mock_sns_client.publish.call_count == 3
 
-    # Check that each item was published
     expected_calls = [
         {
             "TopicArn": os.environ["ITEM_LOAD_TOPIC_ARN"],
@@ -537,7 +470,6 @@ def test_handler_multiple_items_from_catalog(
         actual_call = mock_sns_client.publish.call_args_list[i]
         assert actual_call.kwargs == expected_call
 
-    # Check logs
     assert "Publishing STAC item item1" in caplog.text
     assert "Publishing STAC item item2" in caplog.text
     assert "Publishing STAC item item3" in caplog.text
@@ -547,7 +479,6 @@ def test_handler_missing_s3_fields(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
     """Test handling when S3 event is missing required fields."""
-    # Arrange - missing bucket name
     incomplete_s3_event = {
         "Records": [
             {
@@ -556,10 +487,7 @@ def test_handler_missing_s3_fields(
                 "awsRegion": "us-east-1",
                 "eventTime": "2023-01-01T12:00:00.000Z",
                 "eventName": "ObjectCreated:Put",
-                "s3": {
-                    "object": {"key": "path/catalog.json"}
-                    # Missing bucket field
-                },
+                "s3": {"object": {"key": "path/catalog.json"}},
             }
         ]
     }
@@ -592,16 +520,12 @@ def test_handler_missing_s3_fields(
         ]
     }
 
-    # Act
     result = item_gen_handler.handler(event, mock_context)
 
-    # Assert
     expected_failures = [{"itemIdentifier": event["Records"][0]["messageId"]}]
     assert result == {"batchItemFailures": expected_failures}
 
-    # Check that get_stac_items was not called
     mock_get_stac_items.assert_not_called()
     mock_sns_client.publish.assert_not_called()
 
-    # Check logs
     assert f"[{event['Records'][0]['messageId']}] Failed with error:" in caplog.text
