@@ -46,7 +46,8 @@ export class PgStacInfra extends Stack {
       stacBrowserConfig,
       ingestorConfig,
       loggingBucketArn,
-      dpsStacItemGenConfig: itemGenConfig,
+      dpsStacItemGenConfig,
+      addStactoolsItemGenerator,
     } = props;
 
     // Pgstac Database
@@ -463,28 +464,28 @@ export class PgStacInfra extends Stack {
       );
     }
 
-    if (itemGenConfig) {
-      // item loader
-      const stacItemLoader = new StacItemLoader(this, "stac-item-loader", {
-        pgstacDb,
-        vpc: vpc,
-        subnetSelection: apiSubnetSelection,
-        batchSize: 500,
-        lambdaTimeoutSeconds: 300,
-        environment: {
-          CREATE_COLLECTIONS_IF_MISSING: "TRUE",
-        },
-      });
+    // item loader
+    const stacItemLoader = new StacItemLoader(this, "stac-item-loader", {
+      pgstacDb,
+      vpc: vpc,
+      subnetSelection: apiSubnetSelection,
+      batchSize: 500,
+      lambdaTimeoutSeconds: 300,
+      environment: {
+        CREATE_COLLECTIONS_IF_MISSING: "TRUE",
+      },
+    });
 
-      pgstacDb.pgstacSecret.grantRead(stacItemLoader.lambdaFunction);
+    pgstacDb.pgstacSecret.grantRead(stacItemLoader.lambdaFunction);
 
-      stacItemLoader.lambdaFunction.connections.allowTo(
-        pgstacDb.connectionTarget,
-        ec2.Port.tcp(5432),
-        "allow connections from stac-item-loader",
-      );
+    stacItemLoader.lambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from stac-item-loader",
+    );
 
-      // item item generators
+    // item generators
+    if (addStactoolsItemGenerator) {
       const stactoolsItemGenerator = new StactoolsItemGenerator(
         this,
         "stactools-item-generator",
@@ -494,24 +495,24 @@ export class PgStacInfra extends Stack {
           subnetSelection: apiSubnetSelection,
         },
       );
-
       stacItemLoader.topic.grantPublish(stactoolsItemGenerator.lambdaFunction);
+    }
 
-      if (itemGenConfig.itemGenRoleArn) {
-        const dpsStacItemGenerator = new DpsStacItemGenerator(
-          this,
-          "dps-item-generator",
-          {
-            itemLoadTopicArn: stacItemLoader.topic.topicArn,
-            roleArn: itemGenConfig.itemGenRoleArn,
-            allowedAccountBucketPairs: itemGenConfig.allowedAccountBucketPairs,
-            vpc,
-            subnetSelection: apiSubnetSelection,
-          },
-        );
+    if (dpsStacItemGenConfig) {
+      const dpsStacItemGenerator = new DpsStacItemGenerator(
+        this,
+        "dps-item-generator",
+        {
+          itemLoadTopicArn: stacItemLoader.topic.topicArn,
+          roleArn: dpsStacItemGenConfig.itemGenRoleArn,
+          allowedAccountBucketPairs:
+            dpsStacItemGenConfig.allowedAccountBucketPairs,
+          vpc,
+          subnetSelection: apiSubnetSelection,
+        },
+      );
 
-        stacItemLoader.topic.grantPublish(dpsStacItemGenerator.lambdaFunction);
-      }
+      stacItemLoader.topic.grantPublish(dpsStacItemGenerator.lambdaFunction);
     }
   }
 }
@@ -672,9 +673,10 @@ export interface Props extends StackProps {
     createElasticIp?: boolean;
   };
   dpsStacItemGenConfig?: {
-    itemGenRoleArn?: string | undefined;
+    itemGenRoleArn: string;
     allowedAccountBucketPairs?:
       | Array<{ accountId: string; bucketArn: string }>
       | undefined;
   };
+  addStactoolsItemGenerator?: boolean | undefined;
 }

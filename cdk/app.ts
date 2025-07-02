@@ -86,6 +86,7 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
     ipv4AllowList: bastionHostIpv4AllowList,
     createElasticIp: stage === "prod",
   },
+  addStactoolsItemGenerator: true,
   terminationProtection: false,
 });
 
@@ -117,9 +118,10 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
   //   customDomainName: stacBrowserCustomDomainName,
   //   certificateArn: stacBrowserCertificateArn,
   // },
-  terminationProtection: false,
+  addStactoolsItemGenerator: false,
   dpsStacItemGenConfig: {
     itemGenRoleArn: userStacItemGenRoleArn,
     allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
   },
+  terminationProtection: false,
 });
