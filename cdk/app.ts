@@ -119,9 +119,11 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
   //   certificateArn: stacBrowserCertificateArn,
   // },
   addStactoolsItemGenerator: false,
-  dpsStacItemGenConfig: {
-    itemGenRoleArn: userStacItemGenRoleArn,
-    allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
-  },
+  ...(userStacItemGenRoleArn && {
+    dpsStacItemGenConfig: {
+      itemGenRoleArn: userStacItemGenRoleArn,
+      allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
+    },
+  }),
   terminationProtection: false,
 });
