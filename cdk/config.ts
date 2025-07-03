@@ -21,6 +21,8 @@ export class Config {
   readonly pgstacVersion: string;
   readonly webAclArn: string;
   readonly bastionHostIpv4AllowList: string[];
+  readonly userStacItemGenRoleArn: string;
+  readonly userStacAllowedPublisherAccountBucketPairs: Array<{accountId: string; bucketArn: string}> | undefined;
 
   constructor() {
     // These are required environment variables and cannot be undefined
@@ -125,6 +127,23 @@ export class Config {
       const parsedConfig = JSON.parse(process.env.BASTION_HOST_IPV4_ALLOW_LIST);
 
       this.bastionHostIpv4AllowList = Object.values(parsedConfig);
+    }
+
+    this.userStacItemGenRoleArn = process.env.USER_STAC_ITEM_GEN_ROLE_ARN!;
+
+    if (process.env.USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS) {
+      try {
+        this.userStacAllowedPublisherAccountBucketPairs = JSON.parse(
+          process.env.USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS,
+        ) as Array<{accountId: string; bucketArn: string}>;
+      } catch (error) {
+        throw new Error(
+          `Invalid JSON format for USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS: ${error}. ` +
+          `Expected format: [{"accountId": "123456789012", "bucketArn": "arn:aws:s3:::bucket-name"}, ...]`
+        );
+      }
+    } else {
+      this.userStacAllowedPublisherAccountBucketPairs = undefined;
     }
   }
 

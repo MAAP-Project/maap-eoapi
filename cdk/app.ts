@@ -27,6 +27,8 @@ const {
   tags,
   titilerDataAccessRoleArn,
   titilerPgStacApiCustomDomainName,
+  userStacAllowedPublisherAccountBucketPairs,
+  userStacItemGenRoleArn,
   version,
   webAclArn,
 } = new Config();
@@ -84,6 +86,7 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
     ipv4AllowList: bastionHostIpv4AllowList,
     createElasticIp: stage === "prod",
   },
+  addStactoolsItemGenerator: true,
   terminationProtection: false,
 });
 
@@ -115,5 +118,12 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
   //   customDomainName: stacBrowserCustomDomainName,
   //   certificateArn: stacBrowserCertificateArn,
   // },
+  addStactoolsItemGenerator: false,
+  ...(userStacItemGenRoleArn && {
+    dpsStacItemGenConfig: {
+      itemGenRoleArn: userStacItemGenRoleArn,
+      allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
+    },
+  }),
   terminationProtection: false,
 });
