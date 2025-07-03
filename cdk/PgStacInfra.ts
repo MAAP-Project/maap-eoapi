@@ -22,6 +22,7 @@ import {
   StacBrowser,
   StacItemLoader,
   StactoolsItemGenerator,
+  StacLoader,
 } from "eoapi-cdk";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
@@ -465,7 +466,7 @@ export class PgStacInfra extends Stack {
     }
 
     // item loader
-    const stacItemLoader = new StacItemLoader(this, "stac-item-loader", {
+    const stacLoader = new StacLoader(this, "stac-item-loader", {
       pgstacDb,
       vpc: vpc,
       subnetSelection: apiSubnetSelection,
@@ -476,9 +477,9 @@ export class PgStacInfra extends Stack {
       },
     });
 
-    pgstacDb.pgstacSecret.grantRead(stacItemLoader.lambdaFunction);
+    pgstacDb.pgstacSecret.grantRead(stacLoader.lambdaFunction);
 
-    stacItemLoader.lambdaFunction.connections.allowTo(
+    stacLoader.lambdaFunction.connections.allowTo(
       pgstacDb.connectionTarget,
       ec2.Port.tcp(5432),
       "allow connections from stac-item-loader",
@@ -490,12 +491,12 @@ export class PgStacInfra extends Stack {
         this,
         "stactools-item-generator",
         {
-          itemLoadTopicArn: stacItemLoader.topic.topicArn,
+          itemLoadTopicArn: stacLoader.topic.topicArn,
           vpc,
           subnetSelection: apiSubnetSelection,
         },
       );
-      stacItemLoader.topic.grantPublish(stactoolsItemGenerator.lambdaFunction);
+      stacLoader.topic.grantPublish(stactoolsItemGenerator.lambdaFunction);
     }
 
     if (dpsStacItemGenConfig) {
@@ -503,7 +504,7 @@ export class PgStacInfra extends Stack {
         this,
         "dps-item-generator",
         {
-          itemLoadTopicArn: stacItemLoader.topic.topicArn,
+          itemLoadTopicArn: stacLoader.topic.topicArn,
           roleArn: dpsStacItemGenConfig.itemGenRoleArn,
           allowedAccountBucketPairs:
             dpsStacItemGenConfig.allowedAccountBucketPairs,
@@ -512,7 +513,7 @@ export class PgStacInfra extends Stack {
         },
       );
 
-      stacItemLoader.topic.grantPublish(dpsStacItemGenerator.lambdaFunction);
+      stacLoader.topic.grantPublish(dpsStacItemGenerator.lambdaFunction);
     }
   }
 }
