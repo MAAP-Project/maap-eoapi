@@ -20,7 +20,6 @@ import {
   StacIngestor,
   TitilerPgstacApiLambda,
   StacBrowser,
-  StacItemLoader,
   StactoolsItemGenerator,
   StacLoader,
 } from "eoapi-cdk";
