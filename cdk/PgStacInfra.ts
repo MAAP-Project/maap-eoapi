@@ -20,9 +20,12 @@ import {
   StacIngestor,
   TitilerPgstacApiLambda,
   StacBrowser,
+  StactoolsItemGenerator,
+  StacLoader,
 } from "eoapi-cdk";
 import { readFileSync } from "fs";
 import { load } from "js-yaml";
+import { DpsStacItemGenerator } from "./constructs/DpsStacItemGenerator";
 
 export class PgStacInfra extends Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -43,6 +46,8 @@ export class PgStacInfra extends Stack {
       stacBrowserConfig,
       ingestorConfig,
       loggingBucketArn,
+      dpsStacItemGenConfig,
+      addStactoolsItemGenerator,
     } = props;
 
     // Pgstac Database
@@ -458,6 +463,57 @@ export class PgStacInfra extends Stack {
         }),
       );
     }
+
+    // item loader
+    const stacLoader = new StacLoader(this, "stac-item-loader", {
+      pgstacDb,
+      vpc: vpc,
+      subnetSelection: apiSubnetSelection,
+      batchSize: 500,
+      lambdaTimeoutSeconds: 300,
+      environment: {
+        CREATE_COLLECTIONS_IF_MISSING: "TRUE",
+      },
+    });
+
+    pgstacDb.pgstacSecret.grantRead(stacLoader.lambdaFunction);
+
+    stacLoader.lambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from stac-item-loader",
+    );
+
+    // item generators
+    if (addStactoolsItemGenerator) {
+      const stactoolsItemGenerator = new StactoolsItemGenerator(
+        this,
+        "stactools-item-generator",
+        {
+          itemLoadTopicArn: stacLoader.topic.topicArn,
+          vpc,
+          subnetSelection: apiSubnetSelection,
+        },
+      );
+      stacLoader.topic.grantPublish(stactoolsItemGenerator.lambdaFunction);
+    }
+
+    if (dpsStacItemGenConfig) {
+      const dpsStacItemGenerator = new DpsStacItemGenerator(
+        this,
+        "dps-item-generator",
+        {
+          itemLoadTopicArn: stacLoader.topic.topicArn,
+          roleArn: dpsStacItemGenConfig.itemGenRoleArn,
+          allowedAccountBucketPairs:
+            dpsStacItemGenConfig.allowedAccountBucketPairs,
+          vpc,
+          subnetSelection: apiSubnetSelection,
+        },
+      );
+
+      stacLoader.topic.grantPublish(dpsStacItemGenerator.lambdaFunction);
+    }
   }
 }
 
@@ -616,4 +672,11 @@ export interface Props extends StackProps {
      */
     createElasticIp?: boolean;
   };
+  dpsStacItemGenConfig?: {
+    itemGenRoleArn: string;
+    allowedAccountBucketPairs?:
+      | Array<{ accountId: string; bucketArn: string }>
+      | undefined;
+  };
+  addStactoolsItemGenerator?: boolean | undefined;
 }
