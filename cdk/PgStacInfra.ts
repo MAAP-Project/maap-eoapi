@@ -495,6 +495,12 @@ export class PgStacInfra extends Stack {
           subnetSelection: apiSubnetSelection,
         },
       );
+      stactoolsItemGenerator.lambdaFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["s3:GetObject"],
+          resources: ["arn:aws:s3:::*/*"],
+        }),
+      );
       stacLoader.topic.grantPublish(stactoolsItemGenerator.lambdaFunction);
     }
 
