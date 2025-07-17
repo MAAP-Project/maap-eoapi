@@ -28,6 +28,7 @@ dependencies = [
     "numexpr>=2.10.0,<2.10.1",
 ]
 
+
 [project.optional-dependencies]
 # https://www.psycopg.org/psycopg3/docs/api/pq.html#pq-module-implementations
 psycopg = [  # pure python implementation
