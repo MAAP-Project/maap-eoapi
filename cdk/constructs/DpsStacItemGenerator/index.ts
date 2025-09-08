@@ -27,7 +27,7 @@ export interface DpsStacItemGeneratorProps {
   /**
    * The lambda runtime to use for the item generation function.
    *
-   * @default lambda.Runtime.PYTHON_3_11
+   * @default lambda.Runtime.PYTHON_3_12
    */
   readonly lambdaRuntime?: lambda.Runtime;
 
@@ -142,7 +142,7 @@ export class DpsStacItemGenerator extends Construct {
 
     const timeoutSeconds = props.lambdaTimeoutSeconds ?? 120;
     const batchSize = props.batchSize ?? 10;
-    const lambdaRuntime = props.lambdaRuntime ?? lambda.Runtime.PYTHON_3_11;
+    const lambdaRuntime = props.lambdaRuntime ?? lambda.Runtime.PYTHON_3_12;
 
     // Create dead letter queue
     this.deadLetterQueue = new sqs.Queue(this, "DeadLetterQueue", {
