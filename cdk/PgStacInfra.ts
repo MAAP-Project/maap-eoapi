@@ -99,14 +99,14 @@ export class PgStacInfra extends Stack {
           : undefined,
     });
 
-    stacApiLambda.stacApiLambdaFunction.connections.allowTo(
+    stacApiLambda.lambdaFunction.connections.allowTo(
       pgstacDb.connectionTarget,
       ec2.Port.tcp(5432),
       "allow connections from stac-fastapi-pgstac",
     );
 
     if (stacApiConfig.integrationApiArn) {
-      stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
+      stacApiLambda.lambdaFunction.addPermission("ApiGatewayInvoke", {
         principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
         sourceArn: stacApiConfig.integrationApiArn,
       });
@@ -197,14 +197,14 @@ export class PgStacInfra extends Stack {
       ];
 
       mosaicPerms.forEach((permission) => {
-        titilerPgstacApi.titilerPgstacLambdaFunction.addToRolePolicy(
+        titilerPgstacApi.lambdaFunction.addToRolePolicy(
           permission,
         );
       });
     }
 
     // Configure titiler-pgstac for pgbouncer
-    titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
+    titilerPgstacApi.lambdaFunction.connections.allowTo(
       pgstacDb.connectionTarget,
       ec2.Port.tcp(5432),
       "allow connections from titiler",
@@ -219,7 +219,7 @@ export class PgStacInfra extends Stack {
     // widget showing count by application route
     const titilerRouteLogWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
-        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+        titilerPgstacApi.lambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler requests by route",
       width: 12,
@@ -238,7 +238,7 @@ export class PgStacInfra extends Stack {
     // widget showing count by referer
     const titilerRefererAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
-        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+        titilerPgstacApi.lambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler requests by request referer",
       width: 6,
@@ -257,7 +257,7 @@ export class PgStacInfra extends Stack {
     // widget showing count by scheme/netloc for routes with url parameter
     const titilerUrlAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
-        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+        titilerPgstacApi.lambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler /cog requests by url scheme and netloc",
       width: 6,
@@ -278,7 +278,7 @@ export class PgStacInfra extends Stack {
     // widget showing count by collection_id for /collections requests
     const titilerCollectionAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
-        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+        titilerPgstacApi.lambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler /collections requests by collection id",
       width: 6,
@@ -299,7 +299,7 @@ export class PgStacInfra extends Stack {
     // widget showing count by collection_id for /collections requests
     const titilerSearchesAnalysisWidget = new cloudwatch.LogQueryWidget({
       logGroupNames: [
-        titilerPgstacApi.titilerPgstacLambdaFunction.logGroup.logGroupName,
+        titilerPgstacApi.lambdaFunction.logGroup.logGroupName,
       ],
       title: "titiler /searches requests by search id",
       width: 6,
