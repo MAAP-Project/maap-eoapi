@@ -64,7 +64,7 @@ export class PgStacInfra extends Stack {
       },
       allocatedStorage: pgstacDbConfig.allocatedStorage,
       instanceType: pgstacDbConfig.instanceType,
-      addPgbouncer: true,
+      addPgbouncer: false,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
     });
 
