@@ -64,7 +64,7 @@ export class PgStacInfra extends Stack {
       },
       allocatedStorage: pgstacDbConfig.allocatedStorage,
       instanceType: pgstacDbConfig.instanceType,
-      addPgbouncer: false,
+      addPgbouncer: true,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
     });
 
@@ -99,11 +99,11 @@ export class PgStacInfra extends Stack {
           : undefined,
     });
 
-    // stacApiLambda.stacApiLambdaFunction.connections.allowTo(
-    //   pgstacDb.connectionTarget,
-    //   ec2.Port.tcp(5432),
-    //   "allow connections from stac-fastapi-pgstac",
-    // );
+    stacApiLambda.stacApiLambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from stac-fastapi-pgstac",
+    );
 
     if (stacApiConfig.integrationApiArn) {
       stacApiLambda.stacApiLambdaFunction.addPermission("ApiGatewayInvoke", {
@@ -204,11 +204,11 @@ export class PgStacInfra extends Stack {
     }
 
     // Configure titiler-pgstac for pgbouncer
-    // titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
-    //   pgstacDb.connectionTarget,
-    //   ec2.Port.tcp(5432),
-    //   "allow connections from titiler",
-    // );
+    titilerPgstacApi.titilerPgstacLambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from titiler",
+    );
 
     // API logging dashboard
 
@@ -348,7 +348,7 @@ export class PgStacInfra extends Stack {
         dataAccessRole: ingestorDataAccessRole,
         stage,
         stacDbSecret: pgstacDb.pgstacSecret,
-        stacDbSecurityGroup: pgstacDb.db.connections.securityGroups[0],
+        stacDbSecurityGroup: pgstacDb.securityGroup!,
         subnetSelection: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
@@ -478,11 +478,11 @@ export class PgStacInfra extends Stack {
 
     pgstacDb.pgstacSecret.grantRead(stacLoader.lambdaFunction);
 
-    // stacLoader.lambdaFunction.connections.allowTo(
-    //   pgstacDb.connectionTarget,
-    //   ec2.Port.tcp(5432),
-    //   "allow connections from stac-item-loader",
-    // );
+    stacLoader.lambdaFunction.connections.allowTo(
+      pgstacDb.connectionTarget,
+      ec2.Port.tcp(5432),
+      "allow connections from stac-item-loader",
+    );
 
     // item generators
     if (addStactoolsItemGenerator) {
