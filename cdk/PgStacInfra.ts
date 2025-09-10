@@ -64,8 +64,14 @@ export class PgStacInfra extends Stack {
       },
       allocatedStorage: pgstacDbConfig.allocatedStorage,
       instanceType: pgstacDbConfig.instanceType,
-      addPgbouncer: false,
+      addPgbouncer: true,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
+      pgbouncerInstanceProps: {
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.SMALL,
+        ),
+      },
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
