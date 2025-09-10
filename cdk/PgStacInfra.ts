@@ -348,7 +348,7 @@ export class PgStacInfra extends Stack {
         dataAccessRole: ingestorDataAccessRole,
         stage,
         stacDbSecret: pgstacDb.pgstacSecret,
-        stacDbSecurityGroup: pgstacDb.securityGroup!,
+        stacDbSecurityGroup: pgstacDb.db.connections.securityGroups[0],
         subnetSelection: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
