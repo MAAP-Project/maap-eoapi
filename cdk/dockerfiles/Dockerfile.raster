@@ -1,9 +1,9 @@
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.12
 
 FROM --platform=linux/amd64 public.ecr.aws/lambda/python:${PYTHON_VERSION}
 
 # Install system dependencies to compile (numexpr)
-RUN yum install -y gcc-c++
+RUN dnf install -y gcc-c++
 
 WORKDIR /tmp
 RUN python -m pip install pip -U
@@ -12,8 +12,12 @@ COPY runtimes/eoapi/raster /tmp/raster
 RUN python -m pip install "mangum>=0.14,<0.15" /tmp/raster["psycopg-binary"] -t /asset --no-binary pydantic
 RUN rm -rf /tmp/raster
 
+# copy libexpat.so.1 into a location included in LD_LIBRARY_PATH in the Lambda runtime environment
+# (/usr/lib64 is not available in the Lambda runtime, just the build environment)
+RUN cp /usr/lib64/libexpat.so.1 /asset/
+
 # Remove system dependencies
-RUN yum remove -y gcc-c++
+RUN dnf remove -y gcc-c++
 
 # Reduce package size and remove useless files
 RUN cd /asset && find . -type f -name '*.pyc' | while read f; do n=$(echo $f | sed 's/__pycache__\///' | sed 's/.cpython-[0-9]*//'); cp $f $n; done;

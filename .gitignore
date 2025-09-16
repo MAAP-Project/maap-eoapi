@@ -8,6 +8,7 @@ __pycache__
 .venv
 .env
 .envrc
+.test-env
 .DS_Store
 
 # CDK asset staging directory

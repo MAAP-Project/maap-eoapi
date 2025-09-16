@@ -5,7 +5,7 @@ description = "An application for generating STAC items from DPS catalog.json ou
 authors = [
     { name = "hrodmn", email = "henry@developmentseed.org" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "obstore>=0.7.0",
     "pydantic>=2.11.0",
