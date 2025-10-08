@@ -2,30 +2,20 @@
 name = "maap-eoapi"
 version = "0.0"
 requires-python = ">=3.12"
-dependencies = [
-  "dps-stac-item-generator",
-]
 
 [tool.uv.sources]
-dps-stac-item-generator = { workspace = true }
+dps-stac-item-generator = { path = "cdk/constructs/DpsStacItemGenerator/runtime" }
+eoapi-raster = { path = "cdk/runtimes/eoapi/raster" }
 
-[tool.uv.workspace]
-members = ["cdk/constructs/DpsStacItemGenerator/runtime"]
 
 [dependency-groups]
 dev = [
     "aws-lambda-typing>=2.20.0",
-    "httpx>=0.28.1",
-    "pytest>=8.3.5",
-    "pytest-mock>=3.14.0",
 ]
 
-[tool.pytest.ini_options]
-addopts = "-vv --ignore=cdk.out --no-header --tb=native"
-pythonpath = "."
-testpaths = [
-    "cdk/constructs/DpsStacItemGenerator/runtime/tests",
-]
+
+[tool.uv]
+no-build-isolation-package = ["numexpr"]
 
 [tool.ruff]
 
