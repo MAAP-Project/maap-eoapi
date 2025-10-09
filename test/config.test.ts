@@ -159,7 +159,7 @@ describe("Config", () => {
       new Config();
     } catch (error) {
       threwError = true;
-      expect(error.message).toContain("Invalid DB_INSTANCE_TYPE");
+      expect((error as Error).message).toContain("Invalid DB_INSTANCE_TYPE");
     }
 
     expect(threwError).toBe(true);
