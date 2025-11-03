@@ -55,7 +55,7 @@ export class PgStacInfra extends Stack {
       vpc,
       allowMajorVersionUpgrade: true,
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_16,
+        version: rds.PostgresEngineVersion.VER_17,
       }),
       vpcSubnets: {
         subnetType: pgstacDbConfig.subnetPublic
