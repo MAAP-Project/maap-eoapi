@@ -104,6 +104,16 @@ export interface DpsStacItemGeneratorProps {
     bucketArn: string;
   }>;
   readonly roleArn: string;
+
+  /**
+   * Deployment stage for naming resources and exports.
+   *
+   * Used to create unique export names for each deployment stage,
+   * allowing multiple stage deployments in the same account.
+   *
+   * @default "default"
+   */
+  readonly stage?: string;
 }
 
 export class DpsStacItemGenerator extends Construct {
@@ -143,6 +153,7 @@ export class DpsStacItemGenerator extends Construct {
     const timeoutSeconds = props.lambdaTimeoutSeconds ?? 120;
     const batchSize = props.batchSize ?? 10;
     const lambdaRuntime = props.lambdaRuntime ?? lambda.Runtime.PYTHON_3_12;
+    const stage = props.stage ?? "default";
 
     // Create dead letter queue
     this.deadLetterQueue = new sqs.Queue(this, "DeadLetterQueue", {
@@ -210,25 +221,25 @@ export class DpsStacItemGenerator extends Construct {
     new CfnOutput(this, "TopicArn", {
       value: this.topic.topicArn,
       description: "ARN of the DpsStacItemGenerator SNS Topic",
-      exportName: "dps-stac-item-generator-topic-arn",
+      exportName: `dps-stac-item-generator-topic-arn-${stage}`,
     });
 
     new CfnOutput(this, "QueueUrl", {
       value: this.queue.queueUrl,
       description: "URL of the DpsStacItemGenerator SQS Queue",
-      exportName: "dps-stac-item-generator-queue-url",
+      exportName: `dps-stac-item-generator-queue-url-${stage}`,
     });
 
     new CfnOutput(this, "DeadLetterQueueUrl", {
       value: this.deadLetterQueue.queueUrl,
       description: "URL of the DpsStacItemGenerator Dead Letter Queue",
-      exportName: "dps-stac-item-generator-deadletter-queue-url",
+      exportName: `dps-stac-item-generator-deadletter-queue-url-${stage}`,
     });
 
     new CfnOutput(this, "FunctionName", {
       value: this.lambdaFunction.functionName,
       description: "Name of the DpsStacItemGenerator Lambda Function",
-      exportName: "dps-stac-item-generator-function-name",
+      exportName: `dps-stac-item-generator-function-name-${stage}`,
     });
   }
 

@@ -505,6 +505,7 @@ export class PgStacInfra extends Stack {
             dpsStacItemGenConfig.allowedAccountBucketPairs,
           vpc,
           subnetSelection: apiSubnetSelection,
+          stage,
         },
       );
 
