@@ -20,7 +20,6 @@ export class Config {
   readonly stacBrowserCertificateArn: string;
   readonly pgstacVersion: string;
   readonly webAclArn: string;
-  readonly bastionHostIpv4AllowList: string[];
   readonly userStacItemGenRoleArn: string;
   readonly userStacAllowedPublisherAccountBucketPairs: Array<{accountId: string; bucketArn: string}> | undefined;
 
@@ -117,18 +116,6 @@ export class Config {
       process.env.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
     this.pgstacVersion = process.env.PGSTAC_VERSION!;
     this.webAclArn = process.env.WEB_ACL_ARN!;
-
-    this.bastionHostIpv4AllowList = [];
-
-    // Parse IP config from environment variable
-    // Format: JSON with label-IP pairs
-    // Example: '{"office":"192.168.1.1", "vpn":"10.0.0.1"}'
-    if (process.env.BASTION_HOST_IPV4_ALLOW_LIST) {
-      const parsedConfig = JSON.parse(process.env.BASTION_HOST_IPV4_ALLOW_LIST);
-
-      this.bastionHostIpv4AllowList = Object.values(parsedConfig);
-    }
-
     this.userStacItemGenRoleArn = process.env.USER_STAC_ITEM_GEN_ROLE_ARN!;
 
     if (process.env.USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS) {
