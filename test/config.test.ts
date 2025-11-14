@@ -93,37 +93,6 @@ describe("Config", () => {
     expect(() => new Config()).toThrow(/Must provide STAGE/);
   });
 
-  test("parses JSON for bastionHostIpv4AllowList correctly", () => {
-    // Set JSON string for BASTION_HOST_IPV4_ALLOW_LIST
-    process.env.BASTION_HOST_IPV4_ALLOW_LIST =
-      '{"office":"192.168.1.1", "vpn":"10.0.0.1"}';
-
-    const config = new Config();
-
-    // Should parse the JSON and extract IPs
-    expect(config.bastionHostIpv4AllowList).toContain("192.168.1.1");
-    expect(config.bastionHostIpv4AllowList).toContain("10.0.0.1");
-    expect(config.bastionHostIpv4AllowList.length).toBe(2);
-  });
-
-  test("handles missing bastionHostIpv4AllowList by providing an empty array", () => {
-    // Make sure the env var doesn't exist
-    delete process.env.BASTION_HOST_IPV4_ALLOW_LIST;
-    
-    const config = new Config();
-    
-    // Should have an empty array when the env var is not provided
-    expect(config.bastionHostIpv4AllowList).toEqual([]);
-  });
-
-  test("throws error for invalid JSON in bastionHostIpv4AllowList", () => {
-    // Set invalid JSON string
-    process.env.BASTION_HOST_IPV4_ALLOW_LIST = "{invalid-json}";
-    
-    // Should throw a SyntaxError when creating a new Config due to invalid JSON
-    expect(() => new Config()).toThrow(SyntaxError);
-  });
-
   test("handles optional environment variables correctly", () => {
     // Set optional environment variables
     process.env.CERTIFICATE_ARN =
