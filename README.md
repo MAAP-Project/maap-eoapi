@@ -2,14 +2,16 @@
 
 [![Tests Status](https://github.com/MAAP-Project/maap-eoapi/actions/workflows/tests.yml/badge.svg)]((https://github.com/MAAP-Project/maap-eoapi/actions?query=workflow:tests))
 
+
 ## Overview
 
+This repository contains the AWS CDK code (written in typescript) used to deploy the MAAP project eoapi infrastructure. It is based on the [eoapi-template example](https://github.com/developmentseed/eoapi-template). For the MAAP use case, we use a subset of the eoapi CDK constructs to define a database, an ingestion API, a STAC API, a raster API (i.e a tiling API) and a pgbouncer instance to manage connections to the database. Here, we deploy all these components into a custom VPC.
 
-This repository contains the AWS CDK code (written in typescript) used to deploy the MAAP project eoapi infrastructure. It is based on the [eoapi-template example](https://github.com/developmentseed/eoapi-template). For the MAAP use case, we use a subset of the eoapi CDK constructs to define a database, an ingestion API, a STAC API, a raster API (i.e a tiling API) and a bastion host for direct connections to the database. Here, we deploy all these components into a custom VPC. 
 
 ## Automated Deployment
 
 Deployment happens through a github workflow manually triggered and defined in `.github/workflows/deploy.yaml`.
+
 
 ## Networking and accessibility of the database. 
 
@@ -23,12 +25,11 @@ This has three consequences :
 2. In addition, because these APIs _also_ sometimes need access to the internet, a NAT gateway must in addition be deployed in that VPC. 
 3. For direct, administrative connections to the database, one _must_ go through an instance placed in the same VPC as the database. 
 
-We approach (3) by re-using the 'bastion host' eoAPI construct, which deploys an EC2 instance that can connect to the database, and can be used to create a tunnel from a user's machine to the database. See the eoAPI docs for more information. 
-
 
 ## Ingestion
 
 The term "ingestion" refers to the process of cataloging data in the STAC catalog associated with this deployment. 
+
 
 ### Direct ingestion
 
@@ -43,11 +44,6 @@ or for a collection
 ```
 pypgstac load --table collections test_collection.json
 ```
-
-This requires 
-
-1. that you are allowed to connect to the database. Because of the security requirements mentioned above, you must go through an SSH tunnel using the bastion host EC2 instance. For this to work, you must be allowed to SSH into this EC@ instance [See these docs for more details](https://developmentseed.org/eoapi-cdk/#bastionhost-)
-2. [the configuration](https://stac-utils.github.io/pgstac/pypgstac/) for the database connection is present in your environment. 
 
 
 ### Indirect ingestion through the ingestion pipeline deployment

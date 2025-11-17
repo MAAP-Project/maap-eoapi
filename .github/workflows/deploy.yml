@@ -27,7 +27,6 @@ jobs:
     
     env:
       AUTHOR: ${{ github.actor }}
-      BASTION_HOST_IPV4_ALLOW_LIST: ${{ vars.BASTION_HOST_IPV4_ALLOW_LIST }}
       CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
       COMMIT_SHA: ${{ github.sha }}
       DB_ALLOCATED_STORAGE: ${{ vars.DB_ALLOCATED_STORAGE }}

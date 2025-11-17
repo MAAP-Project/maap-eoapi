@@ -13,7 +13,6 @@ import {
 import { Aws, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import {
-  BastionHost,
   CustomLambdaFunctionProps,
   PgStacApiLambda,
   PgStacDatabase,
@@ -321,16 +320,6 @@ export class PgStacInfra extends Stack {
         "ingestor-data-access-role",
         ingestorConfig.dataAccessRoleArn,
       );
-
-      new BastionHost(this, "bastion-host", {
-        vpc,
-        db: pgstacDb.db,
-        ipv4Allowlist: ingestorConfig.ipv4AllowList,
-        userData: ec2.UserData.custom(
-          readFileSync(ingestorConfig.userDataPath, { encoding: "utf-8" }),
-        ),
-        createElasticIp: ingestorConfig.createElasticIp,
-      });
 
       new StacIngestor(this, "stac-ingestor", {
         vpc,
@@ -658,16 +647,6 @@ export interface Props extends StackProps {
      * Where userdata.yaml is found.
      */
     userDataPath: string;
-
-    /**
-     * Which IPs to allow to access bastion host.
-     */
-    ipv4AllowList: string[];
-
-    /**
-     * Flag to control whether the Bastion Host should make a non-dynamic elastic IP.
-     */
-    createElasticIp?: boolean;
   };
   dpsStacItemGenConfig?: {
     itemGenRoleArn: string;
