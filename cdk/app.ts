@@ -28,6 +28,8 @@ const {
   titilerPgStacApiCustomDomainName,
   userStacAllowedPublisherAccountBucketPairs,
   userStacItemGenRoleArn,
+  userStacStacApiCustomDomainName,
+  userStacTitilerPgStacApiCustomDomainName,
   version,
   webAclArn,
 } = new Config();
@@ -93,6 +95,7 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
   stage,
   type: "internal",
   version,
+  certificateArn,
   webAclArn,
   loggingBucketArn: common.loggingBucket.bucketArn,
   pgstacDbConfig: {
@@ -102,12 +105,12 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
     subnetPublic: false,
   },
   stacApiConfig: {
-    // customDomainName: stacApiCustomDomainName,
+    customDomainName: userStacStacApiCustomDomainName,
   },
   titilerPgstacConfig: {
     mosaicHost,
     bucketsPath: "./titiler_buckets.yaml",
-    // customDomainName: titilerPgStacApiCustomDomainName,
+    customDomainName: userStacTitilerPgStacApiCustomDomainName,
     dataAccessRoleArn: titilerDataAccessRoleArn,
   },
   // stacBrowserConfig: {

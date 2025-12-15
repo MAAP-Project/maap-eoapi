@@ -22,6 +22,8 @@ export class Config {
   readonly webAclArn: string;
   readonly userStacItemGenRoleArn: string;
   readonly userStacAllowedPublisherAccountBucketPairs: Array<{accountId: string; bucketArn: string}> | undefined;
+  readonly userStacStacApiCustomDomainName: string | undefined;
+  readonly userStacTitilerPgStacApiCustomDomainName: string | undefined;
 
   constructor() {
     // These are required environment variables and cannot be undefined
@@ -117,6 +119,8 @@ export class Config {
     this.pgstacVersion = process.env.PGSTAC_VERSION!;
     this.webAclArn = process.env.WEB_ACL_ARN!;
     this.userStacItemGenRoleArn = process.env.USER_STAC_ITEM_GEN_ROLE_ARN!;
+    this.userStacStacApiCustomDomainName = process.env.USER_STAC_STAC_API_CUSTOM_DOMAIN_NAME;
+    this.userStacTitilerPgStacApiCustomDomainName = process.env.USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
 
     if (process.env.USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS) {
       try {
