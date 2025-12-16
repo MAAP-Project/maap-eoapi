@@ -65,6 +65,7 @@ export class PgStacInfra extends Stack {
       instanceType: pgstacDbConfig.instanceType,
       addPgbouncer: true,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
+      customResourceProperties: { context: true },
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
