@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.11.0",
     "pystac[validation]>=1.13.0",
     "stac-pydantic>=3.2.0",
+    "python-slugify==8.0.4",
 ]
 
 [dependency-groups]
