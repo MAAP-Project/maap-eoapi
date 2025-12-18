@@ -300,3 +300,25 @@ class TestGetStacItems:
                 Exception, match="Failed to parse catalog.json: invalid format"
             ):
                 list(get_stac_items(catalog_s3_key))
+
+    def test_santitize_collection_id(self, mock_catalog, mock_job_metadata):
+        """Test that collection ID is sanitized correctly."""
+        catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
+        mock_job_metadata["username"] = "user/name"
+        mock_job_metadata["algorithm_name"] = "algo?name"
+        expected_collection_id = "user-name__algo-name__0.1__test"
+
+        with (
+            patch(
+                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                return_value=mock_catalog,
+            ),
+            patch(
+                "dps_stac_item_generator.item.load_met_json",
+                return_value=mock_job_metadata,
+            ),
+        ):
+            items = list(get_stac_items(catalog_s3_key))
+
+            for item in items:
+                assert item.collection == expected_collection_id
