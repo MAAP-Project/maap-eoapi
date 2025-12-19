@@ -128,6 +128,7 @@ export class PgStacInfra extends Stack {
         file: "dockerfiles/Dockerfile.raster",
         buildArgs: { PYTHON_VERSION: "3.12" },
       }),
+      handler: "handler.handler",
       role: titilerDataAccessRole,
     };
 
