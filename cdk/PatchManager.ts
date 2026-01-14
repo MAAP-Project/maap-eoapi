@@ -30,7 +30,7 @@ export class PatchManagerStack extends Stack {
       {
         name: 'patch-maintenance-window',
         description: 'Weekly patching using AWS default patch baseline',
-        schedule: 'cron(0 3 ? * SUN *)', // Sundays 03:00 UTC
+        schedule: 'cron(0 7 ? * WED *)', // Wednesdays 07:00 UTC
         duration: 3,
         cutoff: 1,
         allowUnassociatedTargets: false,
