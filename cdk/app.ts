@@ -6,6 +6,7 @@ import { Vpc } from "./Vpc";
 import { Config } from "./config";
 import { PgStacInfra } from "./PgStacInfra";
 import { MaapEoapiCommon } from "./MaapEoapiCommon";
+import { PatchManagerStack } from "./PatchManager";
 
 const {
   buildStackName,
@@ -126,4 +127,8 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
     },
   }),
   terminationProtection: false,
+});
+
+new PatchManagerStack(app, buildStackName("patch-manager"), {
+  stage,
 });
