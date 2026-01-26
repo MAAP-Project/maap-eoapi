@@ -66,6 +66,7 @@ export class PgStacInfra extends Stack {
       addPgbouncer: true,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
       customResourceProperties: { context: true },
+      bootstrapperLambdaFunctionOptions: { timeout: Duration.minutes(15) },
     });
 
     const apiSubnetSelection: ec2.SubnetSelection = {
