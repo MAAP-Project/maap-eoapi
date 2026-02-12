@@ -27,6 +27,7 @@ import { load } from "js-yaml";
 import { DpsStacItemGenerator } from "./constructs/DpsStacItemGenerator";
 
 export class PgStacInfra extends Stack {
+  public readonly pgbouncerInstanceId: string;
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
 
@@ -68,6 +69,9 @@ export class PgStacInfra extends Stack {
       customResourceProperties: { context: true },
       bootstrapperLambdaFunctionOptions: { timeout: Duration.minutes(15) },
     });
+    if (pgstacDb.pgbouncerInstanceId) {
+      this.pgbouncerInstanceId = pgstacDb.pgbouncerInstanceId;
+    }
 
     const apiSubnetSelection: ec2.SubnetSelection = {
       subnetType: pgstacDbConfig.subnetPublic

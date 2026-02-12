@@ -4,7 +4,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 export class PatchManagerStack extends Stack {
-  constructor(scope: Construct, id: string, props?: Props) {
+  constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
 
     // IAM role used by the maintenance window
@@ -46,11 +46,8 @@ export class PatchManagerStack extends Stack {
         resourceType: 'INSTANCE',
         targets: [
           {
-            key: 'tag:Name',
-            values: [
-              `MAAP-STAC-${props?.stage}-pgSTAC-pgbouncer`,
-              `MAAP-STAC-${props?.stage}-userSTAC-pgbouncer`,
-            ],
+            key: 'InstanceIds',
+            values: [...props.instanceIds],
           },
         ],
       },
@@ -84,7 +81,7 @@ export class PatchManagerStack extends Stack {
 
 export interface Props extends StackProps {
   /**
-   * Stage of this stack. Used for naming resources.
+   * Instance IDs to target for patching.
    */
-  stage: string;
+  instanceIds: string[];
 }
