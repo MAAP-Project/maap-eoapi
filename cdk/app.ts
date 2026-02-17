@@ -6,6 +6,7 @@ import { Vpc } from "./Vpc";
 import { Config } from "./config";
 import { PgStacInfra } from "./PgStacInfra";
 import { MaapEoapiCommon } from "./MaapEoapiCommon";
+import { PatchManagerStack } from "./PatchManager";
 
 const {
   buildStackName,
@@ -49,7 +50,7 @@ const common = new MaapEoapiCommon(app, buildStackName("common"), {
   terminationProtection: false,
 });
 
-new PgStacInfra(app, buildStackName("pgSTAC"), {
+const coreInfrastructure = new PgStacInfra(app, buildStackName("pgSTAC"), {
   vpc,
   tags,
   stage,
@@ -89,7 +90,7 @@ new PgStacInfra(app, buildStackName("pgSTAC"), {
   terminationProtection: false,
 });
 
-new PgStacInfra(app, buildStackName("userSTAC"), {
+const userInfrastructure = new PgStacInfra(app, buildStackName("userSTAC"), {
   vpc,
   tags,
   stage,
@@ -125,5 +126,13 @@ new PgStacInfra(app, buildStackName("userSTAC"), {
       allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
     },
   }),
+  terminationProtection: false,
+});
+
+new PatchManagerStack(app, buildStackName("patch-manager"), {
+  instanceIds: [
+    coreInfrastructure.pgbouncerInstanceId,
+    userInfrastructure.pgbouncerInstanceId,
+  ],
   terminationProtection: false,
 });
