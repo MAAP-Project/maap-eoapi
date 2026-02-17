@@ -65,6 +65,7 @@ export class PgStacInfra extends Stack {
       allocatedStorage: pgstacDbConfig.allocatedStorage,
       instanceType: pgstacDbConfig.instanceType,
       addPgbouncer: true,
+      addPatchManager: false,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
       customResourceProperties: { context: true },
       bootstrapperLambdaFunctionOptions: { timeout: Duration.minutes(15) },
