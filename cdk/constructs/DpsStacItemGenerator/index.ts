@@ -162,7 +162,8 @@ export class DpsStacItemGenerator extends Construct {
 
     // Create main queue
     this.queue = new sqs.Queue(this, "Queue", {
-      visibilityTimeout: Duration.seconds(timeoutSeconds + 10),
+      deliveryDelay: Duration.minutes(1),
+      visibilityTimeout: Duration.minutes(5),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
       deadLetterQueue: {
         maxReceiveCount: 5,
