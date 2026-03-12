@@ -9,6 +9,7 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_cloudwatch as cloudwatch,
+  aws_ssm as ssm,
 } from "aws-cdk-lib";
 import { Aws, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
@@ -27,7 +28,6 @@ import { load } from "js-yaml";
 import { DpsStacItemGenerator } from "./constructs/DpsStacItemGenerator";
 
 export class PgStacInfra extends Stack {
-  public readonly pgbouncerInstanceId: string;
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
 
@@ -71,7 +71,11 @@ export class PgStacInfra extends Stack {
       bootstrapperLambdaFunctionOptions: { timeout: Duration.minutes(15) },
     });
     if (pgstacDb.pgbouncerInstanceId) {
-      this.pgbouncerInstanceId = pgstacDb.pgbouncerInstanceId;
+      new ssm.StringParameter(this, "pgbouncer-instance-id-param", {
+        parameterName: `/maap-eoapi/${stage}/${type}/pgbouncer-instance-id`,
+        stringValue: pgstacDb.pgbouncerInstanceId,
+        description: `PgBouncer EC2 instance ID for MAAP eoAPI ${type} stack (${stage})`,
+      });
     }
 
     const apiSubnetSelection: ec2.SubnetSelection = {

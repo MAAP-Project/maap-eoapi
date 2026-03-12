@@ -129,10 +129,12 @@ const userInfrastructure = new PgStacInfra(app, buildStackName("userSTAC"), {
   terminationProtection: false,
 });
 
-new PatchManagerStack(app, buildStackName("patch-manager"), {
-  instanceIds: [
-    coreInfrastructure.pgbouncerInstanceId,
-    userInfrastructure.pgbouncerInstanceId,
+const patchManager = new PatchManagerStack(app, buildStackName("patch-manager"), {
+  pgbouncerParamNames: [
+    `/maap-eoapi/${stage}/public/pgbouncer-instance-id`,
+    `/maap-eoapi/${stage}/internal/pgbouncer-instance-id`,
   ],
   terminationProtection: false,
 });
+patchManager.addDependency(coreInfrastructure);
+patchManager.addDependency(userInfrastructure);
