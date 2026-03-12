@@ -38,7 +38,7 @@ export class PatchManagerStack extends Stack {
     );
 
     const instanceIds = props.pgbouncerParamNames.map((paramName) =>
-      ssm.StringParameter.valueFromLookup(this, paramName)
+      ssm.StringParameter.valueForStringParameter(this, paramName)
     );
 
     // Target EC2 instances by Name tag
