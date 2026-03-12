@@ -134,5 +134,9 @@ new PatchManagerStack(app, buildStackName("patch-manager"), {
     `/maap-eoapi/${stage}/public/pgbouncer-instance-id`,
     `/maap-eoapi/${stage}/internal/pgbouncer-instance-id`,
   ],
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
   terminationProtection: false,
 });
