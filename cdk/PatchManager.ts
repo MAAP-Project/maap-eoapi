@@ -37,6 +37,10 @@ export class PatchManagerStack extends Stack {
       },
     );
 
+    const instanceIds = props.pgbouncerParamNames.map((paramName) =>
+      ssm.StringParameter.valueFromLookup(this, paramName)
+    );
+
     // Target EC2 instances by Name tag
     const target = new ssm.CfnMaintenanceWindowTarget(
       this,
@@ -47,7 +51,7 @@ export class PatchManagerStack extends Stack {
         targets: [
           {
             key: 'InstanceIds',
-            values: [...props.instanceIds],
+            values: instanceIds,
           },
         ],
       },
@@ -81,7 +85,7 @@ export class PatchManagerStack extends Stack {
 
 export interface Props extends StackProps {
   /**
-   * Instance IDs to target for patching.
+   * SSM parameter names storing the PgBouncer EC2 instance IDs to target for patching.
    */
-  instanceIds: string[];
+  pgbouncerParamNames: string[];
 }
