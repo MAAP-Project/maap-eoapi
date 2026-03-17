@@ -9,8 +9,8 @@ import pystac
 from obstore.store import from_url
 from pystac import Link
 from pystac.stac_io import DefaultStacIO, StacIO
-from stac_pydantic.item import Item
 from slugify import slugify
+from stac_pydantic.item import Item
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -95,14 +95,14 @@ def get_stac_items(catalog_json_key: str) -> Generator[Item, Any, Any]:
             f"could not locate the .met.json file with the DPS job outputs in {job_output_prefix}"
         )
 
-    collection_id = slugify(COLLECTION_ID_FORMAT.format(**job_metadata), regex_pattern=r'[/\?#%& ]+')
+    collection_id = slugify(
+        COLLECTION_ID_FORMAT.format(**job_metadata), regex_pattern=r"[/\?#%& ]+"
+    )
 
     catalog = pystac.Catalog.from_file(catalog_json_key)
     catalog.make_all_asset_hrefs_absolute()
 
     for item in catalog.get_all_items():
-        item.validate()
-
         item_dict = item.to_dict()
         item_dict["collection"] = collection_id
 
