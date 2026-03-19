@@ -104,6 +104,7 @@ export class Config {
 
     this.version = process.env.npm_package_version!; // Set by node.js
     this.tags = {
+      project: "MAAP",
       version: this.version,
       stage: this.stage,
     };
