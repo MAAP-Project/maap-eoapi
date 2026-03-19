@@ -77,7 +77,7 @@ describe("Config", () => {
     expect(config.dbInstanceType.toString()).toBe("t3.micro");
 
     // Test tags
-    expect(config.tags.version).toBe("0.1.1");
+    expect(config.tags.version).toBe("1.0.0");
     expect(config.tags.stage).toBe("test");
   });
 
