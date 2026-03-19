@@ -105,10 +105,7 @@ export class Config {
     this.version = process.env.npm_package_version!; // Set by node.js
     this.tags = {
       project: "MAAP",
-      author: String(process.env.AUTHOR),
-      gitCommit: String(process.env.COMMIT_SHA),
-      gitRepository: String(process.env.GIT_REPOSITORY),
-      version: String(process.env.VERSION),
+      version: this.version,
       stage: this.stage,
     };
 
