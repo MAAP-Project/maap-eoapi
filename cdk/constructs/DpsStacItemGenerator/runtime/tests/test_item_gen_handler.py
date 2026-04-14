@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from dps_stac_item_generator import handler as item_gen_handler
+from dps_stac_item_generator.handler import _load_collection_id_registry
 from stac_pydantic.item import Item
 
 
@@ -141,7 +142,10 @@ def test_handler_success_single_message(
 
     assert result is None
 
-    mock_get_stac_items.assert_called_once_with(expected_s3_uri)
+    mock_get_stac_items.assert_called_once_with(
+        expected_s3_uri,
+        collection_id_registry=item_gen_handler.COLLECTION_ID_REGISTRY,
+    )
 
     mock_sns_client.publish.assert_called_once_with(
         TopicArn=os.environ["ITEM_LOAD_TOPIC_ARN"],
@@ -187,8 +191,14 @@ def test_handler_success_multiple_messages(
     assert mock_sns_client.publish.call_count == 2
 
     expected_calls = [
-        mocker.call("s3://test-catalog-bucket-1/path1/catalog.json"),
-        mocker.call("s3://test-catalog-bucket-2/path2/catalog.json"),
+        mocker.call(
+            "s3://test-catalog-bucket-1/path1/catalog.json",
+            collection_id_registry=item_gen_handler.COLLECTION_ID_REGISTRY,
+        ),
+        mocker.call(
+            "s3://test-catalog-bucket-2/path2/catalog.json",
+            collection_id_registry=item_gen_handler.COLLECTION_ID_REGISTRY,
+        ),
     ]
     mock_get_stac_items.assert_has_calls(expected_calls)
 
@@ -473,6 +483,29 @@ def test_handler_multiple_items_from_catalog(
     assert "Publishing STAC item item1" in caplog.text
     assert "Publishing STAC item item2" in caplog.text
     assert "Publishing STAC item item3" in caplog.text
+
+
+class TestLoadCollectionIdRegistry:
+    """Test cases for _load_collection_id_registry helper."""
+
+    def test_valid_json_parsed_correctly(self):
+        raw = '{"my-collection": ["user1", "user2"], "maap-*": ["user3"]}'
+        result = _load_collection_id_registry(raw)
+        assert result == {"my-collection": ["user1", "user2"], "maap-*": ["user3"]}
+
+    def test_empty_object_returns_empty_dict(self):
+        assert _load_collection_id_registry("{}") == {}
+
+    def test_malformed_json_returns_empty_dict(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            result = _load_collection_id_registry("not-valid-json")
+        assert result == {}
+        assert "USER_STAC_COLLECTION_ID_REGISTRY" in caplog.text
+
+    def test_missing_env_var_defaults_to_empty_dict(self, monkeypatch):
+        monkeypatch.delenv("USER_STAC_COLLECTION_ID_REGISTRY", raising=False)
+        raw = os.environ.get("USER_STAC_COLLECTION_ID_REGISTRY", "{}")
+        assert _load_collection_id_registry(raw) == {}
 
 
 def test_handler_missing_s3_fields(

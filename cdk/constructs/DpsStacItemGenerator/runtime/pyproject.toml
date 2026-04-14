@@ -16,6 +16,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "boto3>=1.42.89",
     "httpx>=0.28.1",
     "pytest>=8.3.5",
     "pytest-mock>=3.14.0",

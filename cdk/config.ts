@@ -22,6 +22,7 @@ export class Config {
   readonly webAclArn: string;
   readonly userStacItemGenRoleArn: string;
   readonly userStacInboundTopicArns: string[] | undefined;
+  readonly userStacCollectionIdRegistry: Record<string, string[]> | undefined;
   readonly userStacStacApiCustomDomainName: string | undefined;
   readonly userStacTitilerPgStacApiCustomDomainName: string | undefined;
 
@@ -132,6 +133,21 @@ export class Config {
       }
     } else {
       this.userStacInboundTopicArns = undefined;
+    }
+
+    if (process.env.USER_STAC_COLLECTION_ID_REGISTRY) {
+      try {
+        this.userStacCollectionIdRegistry = JSON.parse(
+          process.env.USER_STAC_COLLECTION_ID_REGISTRY,
+        ) as Record<string, string[]>;
+      } catch (error) {
+        throw new Error(
+          `Invalid JSON format for USER_STAC_COLLECTION_ID_REGISTRY: ${error}. ` +
+          `Expected format: {"collection-id": ["user1", "user2"]}`
+        );
+      }
+    } else {
+      this.userStacCollectionIdRegistry = undefined;
     }
   }
 
