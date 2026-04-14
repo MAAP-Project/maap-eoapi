@@ -502,8 +502,7 @@ export class PgStacInfra extends Stack {
         {
           itemLoadTopicArn: stacLoader.topic.topicArn,
           roleArn: dpsStacItemGenConfig.itemGenRoleArn,
-          allowedAccountBucketPairs:
-            dpsStacItemGenConfig.allowedAccountBucketPairs,
+          inboundTopicArns: dpsStacItemGenConfig.inboundTopicArns,
           vpc,
           subnetSelection: apiSubnetSelection,
           stage,
@@ -662,9 +661,7 @@ export interface Props extends StackProps {
   };
   dpsStacItemGenConfig?: {
     itemGenRoleArn: string;
-    allowedAccountBucketPairs?:
-      | Array<{ accountId: string; bucketArn: string }>
-      | undefined;
+    inboundTopicArns?: string[];
   };
   addStactoolsItemGenerator?: boolean | undefined;
 }

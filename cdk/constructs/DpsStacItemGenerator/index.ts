@@ -1,6 +1,5 @@
 import {
   aws_ec2 as ec2,
-  aws_iam as iam,
   aws_lambda as lambda,
   aws_sqs as sqs,
   aws_sns as sns,
@@ -91,18 +90,16 @@ export interface DpsStacItemGeneratorProps {
   readonly itemLoadTopicArn: string;
 
   /**
-   * Array of account ID and bucket ARN pairs that are allowed to publish.
+   * ARNs of externally-managed SNS topics that trigger item generation.
    *
-   * Format: [{accountId: "123456789012", bucketArn: "arn:aws:s3:::bucket-name"}, ...]
+   * These topics are owned and managed in the account where the source S3
+   * buckets live. The SQS queue will subscribe to each topic. For
+   * cross-account topics, the topic policy in the remote account must permit
+   * `sns:Subscribe` from this account.
    *
-   * This provides fine-grained control ensuring only specific buckets from
-   * specific accounts can trigger item generation, preventing cross-account
-   * privilege escalation.
+   * @default []
    */
-  readonly allowedAccountBucketPairs?: Array<{
-    accountId: string;
-    bucketArn: string;
-  }>;
+  readonly inboundTopicArns?: string[];
   readonly roleArn: string;
 
   /**
@@ -135,14 +132,6 @@ export class DpsStacItemGenerator extends Construct {
   public readonly deadLetterQueue: sqs.Queue;
 
   /**
-   * The SNS topic that receives item generation requests.
-   *
-   * External systems publish ItemRequest messages to this topic to trigger
-   * STAC item generation. The topic fans out to the SQS queue for processing.
-   */
-  public readonly topic: sns.Topic;
-
-  /**
    * The Lambda function that generates STAC items
    */
   public readonly lambdaFunction: lambda.Function;
@@ -171,18 +160,15 @@ export class DpsStacItemGenerator extends Construct {
       },
     });
 
-    // Create SNS topic
-    this.topic = new sns.Topic(this, "Topic", {
-      displayName: `${id}-ItemGenTopic`,
+    // Subscribe the queue to each externally-managed inbound topic
+    (props.inboundTopicArns ?? []).forEach((topicArn, index) => {
+      const topic = sns.Topic.fromTopicArn(
+        this,
+        `InboundTopic${index}`,
+        topicArn,
+      );
+      topic.addSubscription(new snsSubscriptions.SqsSubscription(this.queue));
     });
-
-    // Add cross-account access policies
-    this.configureCrossAccountAccess(props);
-
-    // Subscribe the queue to the topic
-    this.topic.addSubscription(
-      new snsSubscriptions.SqsSubscription(this.queue),
-    );
 
     this.lambdaFunction = new lambda.Function(this, "Function", {
       runtime: lambdaRuntime,
@@ -219,12 +205,6 @@ export class DpsStacItemGenerator extends Construct {
     // The consuming construct should handle this permission
 
     // Create outputs
-    new CfnOutput(this, "TopicArn", {
-      value: this.topic.topicArn,
-      description: "ARN of the DpsStacItemGenerator SNS Topic",
-      exportName: `dps-stac-item-generator-topic-arn-${stage}`,
-    });
-
     new CfnOutput(this, "QueueUrl", {
       value: this.queue.queueUrl,
       description: "URL of the DpsStacItemGenerator SQS Queue",
@@ -242,27 +222,5 @@ export class DpsStacItemGenerator extends Construct {
       description: "Name of the DpsStacItemGenerator Lambda Function",
       exportName: `dps-stac-item-generator-function-name-${stage}`,
     });
-  }
-
-  private configureCrossAccountAccess(props: DpsStacItemGeneratorProps) {
-    if (props.allowedAccountBucketPairs?.length) {
-      props.allowedAccountBucketPairs.forEach((pair, index) => {
-        this.topic.addToResourcePolicy(
-          new iam.PolicyStatement({
-            sid: `AllowAccountBucketPair${index}Publish`,
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal("s3.amazonaws.com")],
-            actions: ["SNS:Publish"],
-            resources: [this.topic.topicArn],
-            conditions: {
-              StringEquals: {
-                "aws:SourceArn": pair.bucketArn,
-                // "aws:SourceAccount": pair.accountId,
-              },
-            },
-          }),
-        );
-      });
-    }
   }
 }
