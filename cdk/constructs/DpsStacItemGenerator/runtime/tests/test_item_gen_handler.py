@@ -1,8 +1,9 @@
 import json
 import logging
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pystac
 import pytest
 from dps_stac_item_generator import handler as item_gen_handler
 from dps_stac_item_generator.handler import _load_collection_id_registry
@@ -33,14 +34,12 @@ def mock_sns_client(mocker):
     mock_client_instance = mocker.MagicMock()
     mock_client_instance.publish.return_value = {"MessageId": "fake-sns-message-id"}
 
-    mock_boto_client = patch(
+    mocker.patch(
         "dps_stac_item_generator.handler.boto3.client",
         return_value=mock_client_instance,
-    ).start()
+    )
 
-    yield mock_client_instance
-
-    mock_boto_client.stop()
+    return mock_client_instance
 
 
 @pytest.fixture
@@ -62,17 +61,15 @@ def mock_get_stac_items(mocker):
     }
     mock_item = Item(**mock_item_dict)
 
-    mock_func = patch(
+    mock_func = mocker.patch(
         "dps_stac_item_generator.handler.get_stac_items", return_value=[mock_item]
-    ).start()
+    )
 
     mock_func.mock_item = mock_item
     mock_func.mock_item_dict = mock_item_dict
     mock_func.mock_item_json = mock_item.model_dump_json()
 
-    yield mock_func
-
-    mock_func.stop()
+    return mock_func
 
 
 def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
@@ -562,3 +559,74 @@ def test_handler_missing_s3_fields(
     mock_sns_client.publish.assert_not_called()
 
     assert f"[{event['Records'][0]['messageId']}] Failed with error:" in caplog.text
+
+
+def test_handler_registry_preserves_authorized_collection_id(
+    mock_context, mock_sns_client, monkeypatch
+):
+    """Handler publishes the user-specified collection ID when the submitting user
+    is listed in the registry for that collection.
+
+    This exercises the full path through get_stac_items rather than mocking it,
+    so it catches any regression in how the handler wires the registry into item
+    generation.
+    """
+    s3_event_data = {
+        "bucket": {"name": "test-dps-bucket"},
+        "object": {"key": "2023/01/15/10/30/45/123456/catalog.json"},
+    }
+    event = create_sqs_event_with_s3_notification([s3_event_data])
+
+    monkeypatch.setattr(
+        item_gen_handler,
+        "COLLECTION_ID_REGISTRY",
+        {"my-custom-collection": ["superman"]},
+    )
+
+    mock_catalog = MagicMock(spec=pystac.Catalog)
+    mock_catalog.make_all_asset_hrefs_absolute.return_value = None
+    pystac_item = MagicMock()
+    pystac_item.to_dict.return_value = {
+        "type": "Feature",
+        "stac_version": "1.0.0",
+        "id": "test-item",
+        "collection": "my-custom-collection",
+        "properties": {"datetime": "2023-01-01T00:00:00Z"},
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]
+            ],
+        },
+        "bbox": [-180, -90, 180, 90],
+        "links": [],
+        "assets": {},
+        "stac_extensions": [],
+    }
+    mock_catalog.get_all_items.return_value = [pystac_item]
+
+    job_metadata = {
+        "algorithm_name": "awesome-algo",
+        "algorithm_version": "0.1",
+        "username": "superman",
+        "tag": "test",
+    }
+
+    with (
+        patch(
+            "dps_stac_item_generator.item.pystac.Catalog.from_file",
+            return_value=mock_catalog,
+        ),
+        patch(
+            "dps_stac_item_generator.item.load_met_json",
+            return_value=job_metadata,
+        ),
+    ):
+        result = item_gen_handler.handler(event, mock_context)
+
+    assert result is None
+    mock_sns_client.publish.assert_called_once()
+    published_item = Item(
+        **json.loads(mock_sns_client.publish.call_args.kwargs["Message"])
+    )
+    assert published_item.collection == "my-custom-collection"
