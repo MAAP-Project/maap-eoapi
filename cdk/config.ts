@@ -21,7 +21,7 @@ export class Config {
   readonly pgstacVersion: string;
   readonly webAclArn: string;
   readonly userStacItemGenRoleArn: string;
-  readonly userStacAllowedPublisherAccountBucketPairs: Array<{accountId: string; bucketArn: string}> | undefined;
+  readonly userStacInboundTopicArns: string[] | undefined;
   readonly userStacStacApiCustomDomainName: string | undefined;
   readonly userStacTitilerPgStacApiCustomDomainName: string | undefined;
 
@@ -119,19 +119,19 @@ export class Config {
     this.userStacStacApiCustomDomainName = process.env.USER_STAC_STAC_API_CUSTOM_DOMAIN_NAME;
     this.userStacTitilerPgStacApiCustomDomainName = process.env.USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
 
-    if (process.env.USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS) {
+    if (process.env.USER_STAC_INBOUND_TOPIC_ARNS) {
       try {
-        this.userStacAllowedPublisherAccountBucketPairs = JSON.parse(
-          process.env.USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS,
-        ) as Array<{accountId: string; bucketArn: string}>;
+        this.userStacInboundTopicArns = JSON.parse(
+          process.env.USER_STAC_INBOUND_TOPIC_ARNS,
+        ) as string[];
       } catch (error) {
         throw new Error(
-          `Invalid JSON format for USER_STAC_ALLOWED_PUBLISHER_ACCOUNT_BUCKET_PAIRS: ${error}. ` +
-          `Expected format: [{"accountId": "123456789012", "bucketArn": "arn:aws:s3:::bucket-name"}, ...]`
+          `Invalid JSON format for USER_STAC_INBOUND_TOPIC_ARNS: ${error}. ` +
+          `Expected format: ["arn:aws:sns:us-west-2:123456789012:topic-name", ...]`
         );
       }
     } else {
-      this.userStacAllowedPublisherAccountBucketPairs = undefined;
+      this.userStacInboundTopicArns = undefined;
     }
   }
 

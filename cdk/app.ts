@@ -27,7 +27,7 @@ const {
   tags,
   titilerDataAccessRoleArn,
   titilerPgStacApiCustomDomainName,
-  userStacAllowedPublisherAccountBucketPairs,
+  userStacInboundTopicArns,
   userStacItemGenRoleArn,
   userStacStacApiCustomDomainName,
   userStacTitilerPgStacApiCustomDomainName,
@@ -123,7 +123,7 @@ const userInfrastructure = new PgStacInfra(app, buildStackName("userSTAC"), {
   ...(userStacItemGenRoleArn && {
     dpsStacItemGenConfig: {
       itemGenRoleArn: userStacItemGenRoleArn,
-      allowedAccountBucketPairs: userStacAllowedPublisherAccountBucketPairs,
+      inboundTopicArns: userStacInboundTopicArns,
     },
   }),
   terminationProtection: false,
