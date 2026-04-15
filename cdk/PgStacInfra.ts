@@ -462,6 +462,7 @@ export class PgStacInfra extends Stack {
       subnetSelection: apiSubnetSelection,
       batchSize: 500,
       lambdaTimeoutSeconds: 300,
+      maxConcurrency: 1,
       environment: {
         CREATE_COLLECTIONS_IF_MISSING: "TRUE",
       },
