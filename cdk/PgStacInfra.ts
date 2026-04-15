@@ -67,8 +67,13 @@ export class PgStacInfra extends Stack {
       addPgbouncer: true,
       addPatchManager: false,
       pgstacVersion: pgstacDbConfig.pgstacVersion,
-      customResourceProperties: { context: true },
+      customResourceProperties: {
+        context: true,
+        update_collection_extent: true,
+        use_queue: true,
+      },
       bootstrapperLambdaFunctionOptions: { timeout: Duration.minutes(15) },
+      parameters: { shared_preload_libraries: "pg_cron" },
     });
     if (pgstacDb.pgbouncerInstanceId) {
       new ssm.StringParameter(this, "pgbouncer-instance-id-param", {
