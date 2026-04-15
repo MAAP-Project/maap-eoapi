@@ -31,6 +31,31 @@ log_handler.setFormatter(formatter)
 logger.addHandler(log_handler)
 
 
+def _load_collection_id_registry(raw: str) -> dict[str, list[str]]:
+    """Parse USER_STAC_COLLECTION_ID_REGISTRY JSON string into a registry dict.
+
+    Args:
+        raw: JSON string mapping collection ID patterns to lists of authorized
+            usernames. An empty JSON object ("{}") disables all overrides.
+
+    Returns:
+        Parsed registry dict, or an empty dict if parsing fails.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning(
+            "Failed to parse USER_STAC_COLLECTION_ID_REGISTRY, using empty map: %s",
+            raw,
+        )
+        return {}
+
+
+COLLECTION_ID_REGISTRY: dict[str, list[str]] = _load_collection_id_registry(
+    os.environ.get("USER_STAC_COLLECTION_ID_REGISTRY", "{}")
+)
+
+
 def get_topic_arn() -> str:
     item_load_topic_arn = os.environ.get("ITEM_LOAD_TOPIC_ARN")
     if not item_load_topic_arn:
@@ -119,7 +144,10 @@ def handler(
             logger.debug(f"[{message_id}] SNS Message content: {message_str}")
 
             catalog_json_key = get_catalog_json_key(message_str)
-            for stac_item in get_stac_items(catalog_json_key):
+            for stac_item in get_stac_items(
+                catalog_json_key,
+                collection_id_registry=COLLECTION_ID_REGISTRY,
+            ):
                 stac_item_json = stac_item.model_dump_json()
 
                 item_load_topic_arn = get_topic_arn()

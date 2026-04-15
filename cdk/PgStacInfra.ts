@@ -462,6 +462,7 @@ export class PgStacInfra extends Stack {
       subnetSelection: apiSubnetSelection,
       batchSize: 500,
       lambdaTimeoutSeconds: 300,
+      maxBatchingWindowMinutes: 5,
       environment: {
         CREATE_COLLECTIONS_IF_MISSING: "TRUE",
       },
@@ -503,6 +504,8 @@ export class PgStacInfra extends Stack {
           itemLoadTopicArn: stacLoader.topic.topicArn,
           roleArn: dpsStacItemGenConfig.itemGenRoleArn,
           inboundTopicArns: dpsStacItemGenConfig.inboundTopicArns,
+          userStacCollectionIdRegistry:
+            dpsStacItemGenConfig.userStacCollectionIdRegistry,
           vpc,
           subnetSelection: apiSubnetSelection,
           stage,
@@ -662,6 +665,7 @@ export interface Props extends StackProps {
   dpsStacItemGenConfig?: {
     itemGenRoleArn: string;
     inboundTopicArns?: string[];
+    userStacCollectionIdRegistry?: Record<string, string[]>;
   };
   addStactoolsItemGenerator?: boolean | undefined;
 }

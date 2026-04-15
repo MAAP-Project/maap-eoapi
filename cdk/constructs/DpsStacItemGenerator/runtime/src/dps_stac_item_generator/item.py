@@ -1,3 +1,4 @@
+import fnmatch
 import json
 import logging
 import re
@@ -77,10 +78,49 @@ def load_met_json(bucket: str, job_output_prefix: str) -> Optional[Dict[str, str
                 )
 
 
-def get_stac_items(catalog_json_key: str) -> Generator[Item, Any, Any]:
+def is_authorized(
+    username: str,
+    collection_id: str,
+    registry: dict[str, list[str]],
+) -> bool:
+    """Return True if username is authorized to publish to collection_id.
+
+    Each key in registry is a collection ID pattern (exact string or glob
+    wildcard using fnmatch syntax). A user is authorized when their username
+    appears in the list for any pattern that matches collection_id.
+
+    Args:
+        username: The DPS job submitter's username.
+        collection_id: The collection ID the item declares.
+        registry: Mapping of collection ID patterns to authorized usernames.
+
+    Returns:
+        True if the username is authorized for the given collection ID.
     """
-    Yield STAC items out of a catalog.json
+    for pattern, authorized_users in registry.items():
+        if fnmatch.fnmatch(collection_id, pattern) and username in authorized_users:
+            return True
+    return False
+
+
+def get_stac_items(
+    catalog_json_key: str,
+    collection_id_registry: dict[str, list[str]] | None = None,
+) -> Generator[Item, Any, Any]:
+    """Yield STAC items out of a catalog.json.
+
+    If collection_id_registry is provided, items whose existing collection ID
+    is authorized for the submitting user are published as-is. All other items
+    receive a deterministic collection ID derived from DPS job metadata.
+
+    Args:
+        catalog_json_key: S3 URI of the catalog.json file.
+        collection_id_registry: Optional mapping of collection ID patterns to
+            lists of authorized usernames. When omitted, all items receive the
+            deterministic collection ID.
     """
+    registry = collection_id_registry or {}
+
     job_output_prefix = get_dps_output_prefix(catalog_json_key)
     if not job_output_prefix:
         raise ValueError(
@@ -95,15 +135,25 @@ def get_stac_items(catalog_json_key: str) -> Generator[Item, Any, Any]:
             f"could not locate the .met.json file with the DPS job outputs in {job_output_prefix}"
         )
 
-    collection_id = slugify(
+    deterministic_collection_id = slugify(
         COLLECTION_ID_FORMAT.format(**job_metadata), regex_pattern=r"[/\?#%& ]+"
     )
+    username = job_metadata.get("username", "")
 
     catalog = pystac.Catalog.from_file(catalog_json_key)
     catalog.make_all_asset_hrefs_absolute()
 
     for item in catalog.get_all_items():
         item_dict = item.to_dict()
-        item_dict["collection"] = collection_id
+        item_collection_id = item_dict.get("collection")
+
+        if item_collection_id and is_authorized(username, item_collection_id, registry):
+            logger.info(
+                "Preserving user-specified collection %s for user %s",
+                item_collection_id,
+                username,
+            )
+        else:
+            item_dict["collection"] = deterministic_collection_id
 
         yield Item(**item_dict)

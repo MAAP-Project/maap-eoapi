@@ -103,6 +103,21 @@ export interface DpsStacItemGeneratorProps {
   readonly roleArn: string;
 
   /**
+   * Registry mapping collection ID patterns to lists of authorized usernames.
+   *
+   * When a DPS job's STAC items already carry a collection ID and the
+   * submitting user is listed as authorized for that collection ID pattern,
+   * the item's collection ID is preserved instead of being replaced with the
+   * deterministic ID. Keys support glob wildcards (e.g. "maap-prefix-*").
+   *
+   * @example
+   * { "my-collection": ["user1", "user2"], "maap-*": ["user3"] }
+   *
+   * @default {} (all items receive the deterministic collection ID)
+   */
+  readonly userStacCollectionIdRegistry?: Record<string, string[]>;
+
+  /**
    * Deployment stage for naming resources and exports.
    *
    * Used to create unique export names for each deployment stage,
@@ -187,6 +202,11 @@ export class DpsStacItemGenerator extends Construct {
       environment: {
         ITEM_LOAD_TOPIC_ARN: props.itemLoadTopicArn,
         LOG_LEVEL: "INFO",
+        ...(props.userStacCollectionIdRegistry && {
+          USER_STAC_COLLECTION_ID_REGISTRY: JSON.stringify(
+            props.userStacCollectionIdRegistry,
+          ),
+        }),
         ...props.environment,
       },
     });
