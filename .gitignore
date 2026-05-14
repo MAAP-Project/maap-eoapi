@@ -17,3 +17,5 @@ cdk.out
 
 # potentially installed packages
 stac-browser/
+
+dev-docs/plans/
