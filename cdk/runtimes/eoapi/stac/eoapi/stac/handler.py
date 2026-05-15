@@ -86,6 +86,16 @@ async def _initialize_db_connections() -> None:
     )
 
 
+def _get_or_create_event_loop() -> asyncio.AbstractEventLoop:
+    """Return the current event loop, or create one if none exists."""
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+
 def _initialize_db_connections_sync(*, close_existing_pools: bool = False) -> None:
     """Initialize database pools from synchronous Lambda hooks."""
     global _CONNECTIONS_INITIALIZED
@@ -93,7 +103,8 @@ def _initialize_db_connections_sync(*, close_existing_pools: bool = False) -> No
     if close_existing_pools:
         _close_pools()
 
-    asyncio.run(_initialize_db_connections())
+    loop = _get_or_create_event_loop()
+    loop.run_until_complete(_initialize_db_connections())
     _CONNECTIONS_INITIALIZED = True
 
 

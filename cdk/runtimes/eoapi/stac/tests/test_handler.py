@@ -133,6 +133,46 @@ def test_on_snap_restore_reconnects_with_expected_write_pool_setting(
 
 
 @pytest.mark.parametrize("with_transactions", [False, True])
+def test_initialize_db_connections_sync_leaves_current_event_loop_available(
+    monkeypatch: pytest.MonkeyPatch,
+    with_transactions: bool,
+) -> None:
+    """Sync init should preserve a current event loop for Mangum."""
+    captured: dict[str, object] = {}
+
+    async def fake_connect_to_db(
+        app: object,
+        *,
+        postgres_settings: object,
+        add_write_connection_pool: bool,
+    ) -> None:
+        captured["app"] = app
+        captured["postgres_settings"] = postgres_settings
+        captured["add_write_connection_pool"] = add_write_connection_pool
+
+    settings = PostgresSettings(
+        pghost="db.internal",
+        pgdatabase="pgstac",
+        pguser="reader",
+        pgpassword="secret",
+        pgport=5432,
+    )
+    handler.WITH_COLLECTION_TRANSACTIONS = with_transactions
+    monkeypatch.setattr(handler, "connect_to_db", fake_connect_to_db)
+    monkeypatch.setattr(handler, "_build_postgres_settings", lambda: settings)
+
+    handler._initialize_db_connections_sync()
+
+    assert handler._CONNECTIONS_INITIALIZED is True
+    assert asyncio.get_event_loop() is not None
+    assert captured == {
+        "app": handler.app,
+        "postgres_settings": settings,
+        "add_write_connection_pool": with_transactions,
+    }
+
+
+@pytest.mark.parametrize("with_transactions", [False, True])
 def test_startup_event_connects_with_expected_write_pool_setting(
     monkeypatch: pytest.MonkeyPatch,
     with_transactions: bool,

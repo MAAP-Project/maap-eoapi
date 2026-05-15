@@ -8,6 +8,7 @@ __pycache__
 .venv
 .env
 .envrc
+.env-test
 .test-env
 .DS_Store
 
