@@ -12,7 +12,18 @@ Start the local pgSTAC + STAC + raster stack from the repository root:
 docker compose up --build stac raster database
 ```
 
-The local compose setup keeps STAC collection transactions disabled by default. Add or override environment variables with `.stac.env`, `.raster.env`, or `.env` as needed.
+The local compose setup bind-mounts `cdk/runtimes/eoapi/stac/` into the container and runs `uvicorn --reload`, so changes under `cdk/runtimes/eoapi/stac/eoapi/stac/` are picked up without rebuilding the image. Add or override environment variables with `.stac.env`, `.raster.env`, or `.env` as needed.
+
+When you enable collection transactions, the runtime now fails closed unless these env vars are present:
+
+- `MAAP_TRANSACTION_AUTH_MODE=basic`
+- one of:
+  - `MAAP_TRANSACTION_AUTH_SECRET_ARN`, or
+  - both `MAAP_TRANSACTION_AUTH_USERNAME` and `MAAP_TRANSACTION_AUTH_PASSWORD`
+
+The secret form is intended for Lambda deployments. The username/password env-var form is intended for local docker-compose development. If a secret ARN is present, it takes precedence.
+
+The secret must be a JSON object with `username` and `password` string fields.
 
 ### Environment shape
 
@@ -28,6 +39,10 @@ The local STAC service uses the same pgSTAC-style environment variables already 
 - `DB_MAX_CONN_SIZE`
 - `ENABLED_EXTENSIONS`
 - `TITILER_ENDPOINT`
+- `MAAP_TRANSACTION_AUTH_MODE`
+- `MAAP_TRANSACTION_AUTH_USERNAME`
+- `MAAP_TRANSACTION_AUTH_PASSWORD`
+- `MAAP_TRANSACTION_AUTH_SECRET_ARN`
 
 The local raster service also expects mosaic settings, so the compose file provides development defaults for:
 
@@ -40,5 +55,7 @@ The local raster service also expects mosaic settings, so the compose file provi
 - The Docker build context for local and CDK builds is `cdk/`.
 - `docker-compose.yml` builds the `local` target, which layers `uvicorn` on top of the runtime asset for local development only.
 - Lambda builds should continue using the default `lambda` target without `uvicorn`.
-- The local compose stack runs the MAAP app via `uvicorn eoapi.stac.main:app`.
-- Runtime behavior, auth, and collection transaction wiring will land in this package in follow-up units.
+- The local compose stack runs the MAAP app via `uvicorn eoapi.stac.main:app --reload --reload-dir /workspace/eoapi/stac`.
+- The Lambda runtime entrypoint is `eoapi.stac.handler.handler` and preserves the upstream SnapStart-aware connection lifecycle.
+- Collection write-route auth is attached with FastAPI security dependencies on `POST /collections` plus `PUT`, `PATCH`, and `DELETE /collections/{collection_id}`.
+- Those dependencies are declared as HTTP Basic auth in OpenAPI, so Swagger UI shows the protected routes with the built-in auth flow instead of relying only on the browser challenge popup.

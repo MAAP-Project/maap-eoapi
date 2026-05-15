@@ -10,9 +10,11 @@ services:
       - -lc
     ports:
       - "${MY_DOCKER_IP:-127.0.0.1}:8081:8081"
+    volumes:
+      - ./cdk/runtimes/eoapi/stac:/workspace
     environment:
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: /asset
+      PYTHONPATH: /workspace:/asset
       POSTGRES_USER: username
       POSTGRES_PASS: password
       POSTGRES_DBNAME: postgis
@@ -23,6 +25,14 @@ services:
       DB_MAX_CONN_SIZE: "1"
       ENABLED_EXTENSIONS: query,sort,fields,filter,free_text,pagination,collection_search,collection_transaction
       TITILER_ENDPOINT: http://raster:8082
+      STAC_FASTAPI_TITLE: MAAP Local STAC API
+      STAC_FASTAPI_LANDING_ID: maap-stac-api-local
+      STAC_FASTAPI_DESCRIPTION: Local deployment of the MAAP STAC API
+      STAC_FASTAPI_VERSION: 0.1.0
+      MAAP_TRANSACTION_AUTH_MODE: ${MAAP_TRANSACTION_AUTH_MODE:-basic}
+      MAAP_TRANSACTION_AUTH_USERNAME: ${MAAP_TRANSACTION_AUTH_USERNAME:-username}
+      MAAP_TRANSACTION_AUTH_PASSWORD: ${MAAP_TRANSACTION_AUTH_PASSWORD:-password}
+      MAAP_TRANSACTION_AUTH_SECRET_ARN: ${MAAP_TRANSACTION_AUTH_SECRET_ARN:-}
     env_file:
       - path: .env
         required: false
@@ -35,7 +45,7 @@ services:
       - >-
         until (echo > /dev/tcp/database/5432) >/dev/null 2>&1; do sleep 1; done
         && python -m uvicorn eoapi.stac.main:app --host 0.0.0.0 --port 8081
-        --workers 1
+        --workers 1 --reload --reload-dir /workspace/eoapi/stac
 
   raster:
     platform: linux/amd64

@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from typing import cast
 
 from brotli_asgi import BrotliMiddleware
+from eoapi.stac.auth import build_transaction_route_dependencies
+from eoapi.stac.transactions import CollectionTransactionExtension
 from fastapi import APIRouter, FastAPI
 from stac_fastapi.api.app import StacApi
 from stac_fastapi.api.middleware import ProxyHeaderMiddleware
@@ -18,6 +20,7 @@ from stac_fastapi.api.models import (
     create_post_request_model,
     create_request_model,
 )
+from stac_fastapi.api.routes import Scope
 from stac_fastapi.extensions.core import (
     CollectionSearchExtension,
     CollectionSearchFilterExtension,
@@ -43,8 +46,6 @@ from stac_fastapi.types.extension import ApiExtension
 from stac_fastapi.types.search import APIRequest
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-
-from eoapi.stac.transactions import CollectionTransactionExtension
 
 settings = Settings()
 
@@ -90,6 +91,13 @@ KNOWN_EXTENSIONS: set[str] = {
     *DEFAULT_ENABLED_EXTENSIONS,
     COLLECTION_TRANSACTION_EXTENSION,
 }
+
+TRANSACTION_ROUTE_SCOPES: list[Scope] = [
+    {"path": "/collections", "method": "POST"},
+    {"path": "/collections/{collection_id}", "method": "PUT"},
+    {"path": "/collections/{collection_id}", "method": "PATCH"},
+    {"path": "/collections/{collection_id}", "method": "DELETE"},
+]
 
 
 def parse_enabled_extensions(raw_value: str | None) -> set[str]:
@@ -158,8 +166,10 @@ def create_app(
     with_collection_transactions = (
         COLLECTION_TRANSACTION_EXTENSION in resolved_extensions
     )
+    transaction_route_dependencies = []
 
     if with_collection_transactions:
+        transaction_route_dependencies = build_transaction_route_dependencies()
         application_extensions.append(
             CollectionTransactionExtension(
                 client=TransactionsClient(),
@@ -238,6 +248,11 @@ def create_app(
         middlewares=_build_middlewares(),
         health_check=health_check,  # type: ignore[arg-type]
     )
+    if transaction_route_dependencies:
+        api.add_route_dependencies(
+            scopes=TRANSACTION_ROUTE_SCOPES,
+            dependencies=transaction_route_dependencies,
+        )
     return api.app
 
 
@@ -246,7 +261,9 @@ def run() -> None:
     try:
         import uvicorn
     except ImportError as error:
-        raise RuntimeError("Uvicorn must be installed in order to use command") from error
+        raise RuntimeError(
+            "Uvicorn must be installed in order to use command"
+        ) from error
 
     uvicorn.run(
         "eoapi.stac.main:app",
