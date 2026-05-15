@@ -7,17 +7,12 @@ from functools import lru_cache
 from hmac import compare_digest
 from typing import Annotated, Any
 
+from eoapi.stac.settings import (
+    TransactionAuthSettings,
+)
 from fastapi import HTTPException, Security, status
 from fastapi.params import Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-
-from eoapi.stac.settings import (
-    MAAP_TRANSACTION_AUTH_MODE_ENV,
-    MAAP_TRANSACTION_AUTH_PASSWORD_ENV,
-    MAAP_TRANSACTION_AUTH_SECRET_ARN_ENV,
-    MAAP_TRANSACTION_AUTH_USERNAME_ENV,
-    TransactionAuthSettings,
-)
 
 _BASIC_AUTH_CHALLENGE_HEADERS = {"WWW-Authenticate": "Basic"}
 basic_auth_scheme = HTTPBasic(
@@ -114,7 +109,9 @@ async def require_transaction_auth(
         raise _unauthorized_basic_auth()
 
     expected_username, expected_password = get_basic_auth_credentials()
-    if not compare_digest(credentials.username, expected_username) or not compare_digest(
+    if not compare_digest(
+        credentials.username, expected_username
+    ) or not compare_digest(
         credentials.password,
         expected_password,
     ):
