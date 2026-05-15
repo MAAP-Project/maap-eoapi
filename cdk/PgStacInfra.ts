@@ -6,6 +6,7 @@ import {
   aws_lambda as lambda,
   aws_rds as rds,
   aws_s3 as s3,
+  aws_secretsmanager as secretsmanager,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_cloudwatch as cloudwatch,
@@ -89,14 +90,75 @@ export class PgStacInfra extends Stack {
         : ec2.SubnetType.PRIVATE_WITH_EGRESS,
     };
 
+    const transactionsConfig = stacApiConfig.transactions;
+    if (transactionsConfig && transactionsConfig.authMode !== "basic") {
+      throw new Error(
+        `Unsupported STAC collection transaction auth mode: ${transactionsConfig.authMode}`,
+      );
+    }
+
+    const transactionAuthSecret = transactionsConfig
+      ? transactionsConfig.authSecretArn
+        ? secretsmanager.Secret.fromSecretCompleteArn(
+            this,
+            "stac-collection-transaction-auth-secret",
+            transactionsConfig.authSecretArn,
+          )
+        : new secretsmanager.Secret(
+            this,
+            "stac-collection-transaction-auth-secret",
+            {
+              description: `Basic auth secret for MAAP ${type} STAC collection transactions (${stage})`,
+              secretName: `/maap-eoapi/${stage}/${type}/stac-collection-transaction-basic-auth`,
+              generateSecretString: {
+                secretStringTemplate: JSON.stringify({
+                  username: `maap-${type}-stac-writer`,
+                }),
+                generateStringKey: "password",
+                excludePunctuation: true,
+              },
+            },
+          )
+      : undefined;
+
+    const stacEnabledExtensions = [
+      "query",
+      "sort",
+      "fields",
+      "filter",
+      "free_text",
+      "pagination",
+      "collection_search",
+      ...(transactionsConfig ? ["collection_transaction"] : []),
+    ];
+
+    const stacApiEnv: Record<string, string> = {
+      STAC_FASTAPI_TITLE: `MAAP ${type} STAC API (${stage})`,
+      STAC_FASTAPI_LANDING_ID: `maap-${type}-stac-api-${stage}`,
+      STAC_FASTAPI_DESCRIPTION: `The ${type} STAC API for the [MAAP project](https://maap-project.org)`,
+      STAC_FASTAPI_VERSION: version,
+      ENABLED_EXTENSIONS: stacEnabledExtensions.join(","),
+      ...(transactionsConfig
+        ? {
+            MAAP_TRANSACTION_AUTH_MODE: transactionsConfig.authMode,
+            MAAP_TRANSACTION_AUTH_SECRET_ARN:
+              transactionAuthSecret!.secretArn,
+          }
+        : {}),
+    };
+
+    const stacApiLambdaOptions: CustomLambdaFunctionProps = {
+      code: lambda.Code.fromDockerBuild(__dirname, {
+        file: "dockerfiles/Dockerfile.stac",
+        targetStage: "lambda",
+        buildArgs: { PYTHON_VERSION: "3.12" },
+      }),
+      handler: "handler.handler",
+    };
+
     // STAC API
     const stacApiLambda = new PgStacApiLambda(this, "pgstac-api", {
-      apiEnv: {
-        STAC_FASTAPI_TITLE: `MAAP ${type} STAC API (${stage})`,
-        STAC_FASTAPI_LANDING_ID: `maap-${type}-stac-api-${stage}`,
-        STAC_FASTAPI_DESCRIPTION: `The ${type} STAC API for the [MAAP project](https://maap-project.org)`,
-        STAC_FASTAPI_VERSION: version,
-      },
+      apiEnv: stacApiEnv,
       vpc,
       db: pgstacDb.connectionTarget,
       dbSecret: pgstacDb.pgstacSecret,
@@ -113,6 +175,7 @@ export class PgStacInfra extends Stack {
             })
           : undefined,
       enableSnapStart: true,
+      lambdaFunctionOptions: stacApiLambdaOptions,
     });
 
     stacApiLambda.lambdaFunction.connections.allowTo(
@@ -125,6 +188,16 @@ export class PgStacInfra extends Stack {
       stacApiLambda.lambdaFunction.addPermission("ApiGatewayInvoke", {
         principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
         sourceArn: stacApiConfig.integrationApiArn,
+      });
+    }
+
+    if (transactionAuthSecret) {
+      transactionAuthSecret.grantRead(stacApiLambda.lambdaFunction);
+
+      new ssm.StringParameter(this, "stac-collection-transaction-auth-secret-param", {
+        parameterName: `/maap-eoapi/${stage}/${type}/stac-collection-transaction-auth-secret-arn`,
+        stringValue: transactionAuthSecret.secretArn,
+        description: `Secrets Manager ARN for MAAP ${type} STAC collection transaction auth (${stage})`,
       });
     }
 
@@ -616,6 +689,15 @@ export interface Props extends StackProps {
      * STAC API api gateway source ARN to be granted STAC API lambda invoke permission.
      */
     integrationApiArn?: string;
+
+    /**
+     * Optional collection transaction support for the STAC API.
+     * When omitted, the API stays read-only.
+     */
+    transactions?: {
+      authMode: "basic" | "jwt";
+      authSecretArn?: string;
+    };
   };
 
   /**

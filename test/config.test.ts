@@ -69,6 +69,7 @@ describe("Config", () => {
     expect(config.webAclArn).toBe(
       "arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl",
     );
+    expect(config.userStacCollectionTransactions).toBeUndefined();
 
     // Test number properties
     expect(config.dbAllocatedStorage).toBe(20);
@@ -91,7 +92,6 @@ describe("Config", () => {
   });
 
   test("handles optional environment variables correctly", () => {
-    // Set optional environment variables
     process.env.CERTIFICATE_ARN =
       "arn:aws:acm:us-east-1:123456789012:certificate/optional-cert";
     process.env.INGESTOR_DOMAIN_NAME = "ingestor.example.com";
@@ -99,12 +99,54 @@ describe("Config", () => {
 
     const config = new Config();
 
-    // Optional values should be set
     expect(config.certificateArn).toBe(
       "arn:aws:acm:us-east-1:123456789012:certificate/optional-cert",
     );
     expect(config.ingestorDomainName).toBe("ingestor.example.com");
     expect(config.titilerPgStacApiCustomDomainName).toBe("titiler.example.com");
+  });
+
+  test("enables user STAC collection transactions with stack-managed auth by default", () => {
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_ENABLED = "true";
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE = "basic";
+
+    const config = new Config();
+
+    expect(config.userStacCollectionTransactions).toEqual({
+      authMode: "basic",
+    });
+  });
+
+  test("accepts an explicit user STAC collection transaction secret ARN override", () => {
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_ENABLED = "true";
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE = "basic";
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN =
+      "arn:aws:secretsmanager:us-west-2:123456789012:secret:user-stac-auth";
+
+    const config = new Config();
+
+    expect(config.userStacCollectionTransactions).toEqual({
+      authMode: "basic",
+      authSecretArn:
+        "arn:aws:secretsmanager:us-west-2:123456789012:secret:user-stac-auth",
+    });
+  });
+
+  test("rejects unsupported user STAC collection transaction auth modes", () => {
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_ENABLED = "true";
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE = "jwt";
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN =
+      "arn:aws:secretsmanager:us-west-2:123456789012:secret:user-stac-auth";
+
+    expect(() => new Config()).toThrow(/Expected \"basic\"/);
+  });
+
+  test("rejects invalid user STAC collection transaction boolean values", () => {
+    process.env.USER_STAC_COLLECTION_TRANSACTIONS_ENABLED = "yes";
+
+    expect(() => new Config()).toThrow(
+      /USER_STAC_COLLECTION_TRANSACTIONS_ENABLED/,
+    );
   });
 
   test("buildStackName formats properly", () => {

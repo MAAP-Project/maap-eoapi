@@ -1,5 +1,27 @@
 import * as aws_ec2 from "aws-cdk-lib/aws-ec2";
 
+export interface CollectionTransactionsConfig {
+  authMode: "basic" | "jwt";
+  authSecretArn?: string;
+}
+
+function parseOptionalBooleanEnv(name: string): boolean | undefined {
+  const value = process.env[name];
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  throw new Error(`Invalid ${name}: ${value}. Expected "true" or "false".`);
+}
+
 export class Config {
   readonly stage: string;
   readonly version: string;
@@ -25,9 +47,11 @@ export class Config {
   readonly userStacCollectionIdRegistry: Record<string, string[]> | undefined;
   readonly userStacStacApiCustomDomainName: string | undefined;
   readonly userStacTitilerPgStacApiCustomDomainName: string | undefined;
+  readonly userStacCollectionTransactions:
+    | CollectionTransactionsConfig
+    | undefined;
 
   constructor() {
-    // These are required environment variables and cannot be undefined
     const requiredVariables = [
       { name: "STAGE", value: process.env.STAGE },
       { name: "DB_INSTANCE_TYPE", value: process.env.DB_INSTANCE_TYPE },
@@ -103,7 +127,7 @@ export class Config {
     this.stacBrowserCertificateArn = process.env.STAC_BROWSER_CERTIFICATE_ARN!;
     this.stacApiCustomDomainName = process.env.STAC_API_CUSTOM_DOMAIN_NAME!;
 
-    this.version = process.env.npm_package_version!; // Set by node.js
+    this.version = process.env.npm_package_version!;
     this.tags = {
       project: "MAAP",
       version: this.version,
@@ -117,8 +141,12 @@ export class Config {
     this.pgstacVersion = process.env.PGSTAC_VERSION!;
     this.webAclArn = process.env.WEB_ACL_ARN!;
     this.userStacItemGenRoleArn = process.env.USER_STAC_ITEM_GEN_ROLE_ARN!;
-    this.userStacStacApiCustomDomainName = process.env.USER_STAC_STAC_API_CUSTOM_DOMAIN_NAME;
-    this.userStacTitilerPgStacApiCustomDomainName = process.env.USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
+    this.userStacStacApiCustomDomainName =
+      process.env.USER_STAC_STAC_API_CUSTOM_DOMAIN_NAME;
+    this.userStacTitilerPgStacApiCustomDomainName =
+      process.env.USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
+    this.userStacCollectionTransactions =
+      this.parseUserStacCollectionTransactions();
 
     if (process.env.USER_STAC_INBOUND_TOPIC_ARNS) {
       try {
@@ -128,7 +156,7 @@ export class Config {
       } catch (error) {
         throw new Error(
           `Invalid JSON format for USER_STAC_INBOUND_TOPIC_ARNS: ${error}. ` +
-          `Expected format: ["arn:aws:sns:us-west-2:123456789012:topic-name", ...]`
+            `Expected format: ["arn:aws:sns:us-west-2:123456789012:topic-name", ...]`,
         );
       }
     } else {
@@ -143,7 +171,7 @@ export class Config {
       } catch (error) {
         throw new Error(
           `Invalid JSON format for USER_STAC_COLLECTION_ID_REGISTRY: ${error}. ` +
-          `Expected format: {"collection-id": ["user1", "user2"]}`
+            `Expected format: {"collection-id": ["user1", "user2"]}`,
         );
       }
     } else {
@@ -158,4 +186,41 @@ export class Config {
    */
   buildStackName = (serviceId: string): string =>
     `MAAP-STAC-${this.stage}-${serviceId}`;
+
+  private parseUserStacCollectionTransactions():
+    | CollectionTransactionsConfig
+    | undefined {
+    const enabled = parseOptionalBooleanEnv(
+      "USER_STAC_COLLECTION_TRANSACTIONS_ENABLED",
+    );
+
+    if (!enabled) {
+      return undefined;
+    }
+
+    const authMode = process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE;
+    if (!authMode) {
+      throw new Error(
+        "Must provide USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE when USER_STAC_COLLECTION_TRANSACTIONS_ENABLED=true",
+      );
+    }
+
+    if (authMode !== "basic") {
+      throw new Error(
+        `Unsupported USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE: ${authMode}. Expected \"basic\".`,
+      );
+    }
+
+    const authSecretArn =
+      process.env.USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN;
+
+    return authSecretArn
+      ? {
+          authMode,
+          authSecretArn,
+        }
+      : {
+          authMode,
+        };
+  }
 }

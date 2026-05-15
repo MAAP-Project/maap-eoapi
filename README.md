@@ -12,6 +12,21 @@ This repository contains the AWS CDK code (written in typescript) used to deploy
 
 Deployment happens through a github workflow manually triggered and defined in `.github/workflows/deploy.yaml`.
 
+## User STAC collection transactions
+
+The internal `userSTAC` deployment can now opt into collection-only STAC transactions.
+
+Enable them with:
+
+- `USER_STAC_COLLECTION_TRANSACTIONS_ENABLED=true`
+- `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE=basic`
+
+When enabled, this CDK stack creates and manages the Secrets Manager secret used for STAC basic auth by default, grants the STAC Lambda read access to it, and publishes the secret ARN to SSM at:
+
+- `/maap-eoapi/<stage>/internal/stac-collection-transaction-auth-secret-arn`
+
+You can still override the secret with `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN` if you need to point at an existing secret instead.
+
 
 ## Networking and accessibility of the database. 
 
