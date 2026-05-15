@@ -239,21 +239,24 @@ dependencies = [
     { name = "starlette-cramjam" },
 ]
 
-[package.optional-dependencies]
-test = [
+[package.dev-dependencies]
+dev = [
     { name = "httpx" },
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx", marker = "extra == 'test'", specifier = ">=0.28.1" },
     { name = "mangum", specifier = "==0.19" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.5" },
     { name = "stac-fastapi-pgstac", specifier = ">=6.2,<6.3" },
     { name = "starlette-cramjam", specifier = ">=0.4,<0.5" },
 ]
-provides-extras = ["test"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=9.0.3" },
+]
 
 [[package]]
 name = "fastapi"

@@ -4,6 +4,10 @@ services:
     build:
       context: ./cdk
       dockerfile: dockerfiles/Dockerfile.stac
+      target: local
+    entrypoint:
+      - /bin/bash
+      - -lc
     ports:
       - "${MY_DOCKER_IP:-127.0.0.1}:8081:8081"
     environment:
@@ -17,7 +21,7 @@ services:
       POSTGRES_PORT: "5432"
       DB_MIN_CONN_SIZE: "1"
       DB_MAX_CONN_SIZE: "1"
-      ENABLED_EXTENSIONS: query,sort,fields,filter,free_text,pagination,collection_search
+      ENABLED_EXTENSIONS: query,sort,fields,filter,free_text,pagination,collection_search,collection_transaction
       TITILER_ENDPOINT: http://raster:8082
     env_file:
       - path: .env
@@ -28,17 +32,20 @@ services:
       - database
       - raster
     command:
-      - /bin/bash
-      - -lc
-      - |
-        until python -c 'import socket; socket.create_connection(("database", 5432), 2).close()'; do sleep 1; done
-        uvicorn stac_fastapi.pgstac.app:app --host 0.0.0.0 --port 8081 --workers 1
+      - >-
+        until (echo > /dev/tcp/database/5432) >/dev/null 2>&1; do sleep 1; done
+        && python -m uvicorn eoapi.stac.main:app --host 0.0.0.0 --port 8081
+        --workers 1
 
   raster:
     platform: linux/amd64
     build:
       context: ./cdk
       dockerfile: dockerfiles/Dockerfile.raster
+      target: local
+    entrypoint:
+      - /bin/bash
+      - -lc
     ports:
       - "${MY_DOCKER_IP:-127.0.0.1}:8082:8082"
     environment:
@@ -60,6 +67,8 @@ services:
       GDAL_HTTP_VERSION: "2"
       VSI_CACHE: "TRUE"
       VSI_CACHE_SIZE: "536870912"
+      MOSAIC_BACKEND: dynamodb://
+      MOSAIC_HOST: ${MOSAIC_HOST:-localhost}
       MOSAIC_CONCURRENCY: "1"
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -72,11 +81,10 @@ services:
     depends_on:
       - database
     command:
-      - /bin/bash
-      - -lc
-      - |
-        until python -c 'import socket; socket.create_connection(("database", 5432), 2).close()'; do sleep 1; done
-        uvicorn eoapi.raster.main:app --host 0.0.0.0 --port 8082 --workers 1
+      - >-
+        until (echo > /dev/tcp/database/5432) >/dev/null 2>&1; do sleep 1; done
+        && python -m uvicorn eoapi.raster.main:app --host 0.0.0.0 --port 8082
+        --workers 1
 
   database:
     image: ghcr.io/stac-utils/pgstac:v0.9.9

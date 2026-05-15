@@ -22,12 +22,6 @@ dependencies = [
     "starlette-cramjam>=0.4,<0.5",
 ]
 
-[project.optional-dependencies]
-test = [
-    "httpx>=0.28.1",
-    "pytest>=8.3.5",
-]
-
 [build-system]
 requires = ["pdm-pep517"]
 build-backend = "pdm.pep517.api"
@@ -39,3 +33,9 @@ path = "eoapi/stac/__init__.py"
 [tool.pdm.build]
 includes = ["eoapi/stac"]
 excludes = ["tests/", "**/.mypy_cache", "**/.DS_Store"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.3",
+]

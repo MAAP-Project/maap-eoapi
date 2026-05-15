@@ -12,7 +12,7 @@ Start the local pgSTAC + STAC + raster stack from the repository root:
 docker compose up --build stac raster database
 ```
 
-The local compose setup keeps STAC transaction behavior disabled by default. Add or override environment variables with `.stac.env`, `.raster.env`, or `.env` as needed.
+The local compose setup keeps STAC collection transactions disabled by default. Add or override environment variables with `.stac.env`, `.raster.env`, or `.env` as needed.
 
 ### Environment shape
 
@@ -29,8 +29,16 @@ The local STAC service uses the same pgSTAC-style environment variables already 
 - `ENABLED_EXTENSIONS`
 - `TITILER_ENDPOINT`
 
+The local raster service also expects mosaic settings, so the compose file provides development defaults for:
+
+- `MOSAIC_BACKEND`
+- `MOSAIC_HOST`
+
 ### Packaging notes
 
-- `cdk/dockerfiles/Dockerfile.stac` builds the Lambda asset from this package.
+- `cdk/dockerfiles/Dockerfile.stac` has separate `lambda` and `local` targets.
 - The Docker build context for local and CDK builds is `cdk/`.
+- `docker-compose.yml` builds the `local` target, which layers `uvicorn` on top of the runtime asset for local development only.
+- Lambda builds should continue using the default `lambda` target without `uvicorn`.
+- The local compose stack runs the MAAP app via `uvicorn eoapi.stac.main:app`.
 - Runtime behavior, auth, and collection transaction wiring will land in this package in follow-up units.
