@@ -22,7 +22,7 @@ basic_auth_scheme = HTTPBasic(
 transaction_auth_settings = TransactionAuthSettings()
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=8)
 def load_secret_dict(secret_arn: str) -> dict[str, Any]:
     """Load and parse a JSON secret from AWS Secrets Manager."""
     try:
@@ -57,18 +57,19 @@ def _unauthorized_basic_auth() -> HTTPException:
     )
 
 
+@lru_cache(maxsize=1)
 def get_basic_auth_credentials() -> tuple[str, str]:
     """Load basic-auth credentials from Secrets Manager or local env vars."""
     if transaction_auth_settings.secret_arn:
         secret = load_secret_dict(transaction_auth_settings.secret_arn)
-        if not isinstance(secret.get("username"), str) or not isinstance(
-            secret.get("password"), str
-        ):
+        username = secret.get("username")
+        password = secret.get("password")
+        if not isinstance(username, str) or not isinstance(password, str):
             raise RuntimeError(
                 "Transaction auth secret must contain string fields 'username' and "
                 "'password'"
             )
-        return secret["username"], secret["password"]
+        return username, password
 
     if transaction_auth_settings.username and transaction_auth_settings.password:
         return transaction_auth_settings.username, transaction_auth_settings.password
@@ -90,7 +91,6 @@ def validate_transaction_auth_config() -> str:
         )
 
     get_basic_auth_credentials()
-
     return auth_mode
 
 
@@ -116,6 +116,20 @@ async def require_transaction_auth(
         expected_password,
     ):
         raise _unauthorized_basic_auth()
+
+
+def reset_transaction_auth_state() -> None:
+    """Reset cached auth state after configuration changes."""
+    cache_clear = getattr(load_secret_dict, "cache_clear", None)
+    if cache_clear is not None:
+        cache_clear()
+
+    cache_clear = getattr(get_basic_auth_credentials, "cache_clear", None)
+    if cache_clear is not None:
+        cache_clear()
+
+    global transaction_auth_settings
+    transaction_auth_settings = TransactionAuthSettings()
 
 
 def build_transaction_route_dependencies() -> list[Depends]:

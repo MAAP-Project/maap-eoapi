@@ -153,7 +153,7 @@ export class PgStacInfra extends Stack {
         targetStage: "lambda",
         buildArgs: { PYTHON_VERSION: "3.12" },
       }),
-      handler: "handler.handler",
+      handler: "eoapi.stac.handler.handler",
     };
 
     // STAC API

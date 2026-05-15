@@ -71,36 +71,44 @@ def _close_pool(pool_name: str) -> None:
         setattr(app.state, pool_name, None)
 
 
+def _close_pools() -> None:
+    """Close both read and write pools if they exist."""
+    _close_pool("readpool")
+    _close_pool("writepool")
+
+
+async def _initialize_db_connections() -> None:
+    """Initialize database pools for the Lambda runtime."""
+    await connect_to_db(
+        app,
+        postgres_settings=_build_postgres_settings(),
+        add_write_connection_pool=WITH_COLLECTION_TRANSACTIONS,
+    )
+
+
+def _initialize_db_connections_sync(*, close_existing_pools: bool = False) -> None:
+    """Initialize database pools from synchronous Lambda hooks."""
+    global _CONNECTIONS_INITIALIZED
+
+    if close_existing_pools:
+        _close_pools()
+
+    asyncio.run(_initialize_db_connections())
+    _CONNECTIONS_INITIALIZED = True
+
+
 @register_before_snapshot
 def on_snapshot():
     """Close DB pools before the Lambda snapshot is taken."""
-    _close_pool("readpool")
-    _close_pool("writepool")
+    _close_pools()
     return {"statusCode": 200}
 
 
 @register_after_restore
 def on_snap_restore():
     """Recreate DB pools after a Lambda snapshot restore."""
-    global _CONNECTIONS_INITIALIZED
-
     try:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        _close_pool("readpool")
-        _close_pool("writepool")
-        loop.run_until_complete(
-            connect_to_db(
-                app,
-                postgres_settings=_build_postgres_settings(),
-                add_write_connection_pool=WITH_COLLECTION_TRANSACTIONS,
-            )
-        )
-        _CONNECTIONS_INITIALIZED = True
+        _initialize_db_connections_sync(close_existing_pools=True)
     except Exception:
         logger.exception("SnapStart: failed to initialize database connection")
         raise
@@ -112,11 +120,7 @@ def on_snap_restore():
 async def startup_event() -> None:
     """Connect to the database when the app starts."""
     logger.info("Setting up DB connection")
-    await connect_to_db(
-        app,
-        postgres_settings=_build_postgres_settings(),
-        add_write_connection_pool=WITH_COLLECTION_TRANSACTIONS,
-    )
+    await _initialize_db_connections()
     logger.info("DB connection setup complete")
 
 
@@ -137,14 +141,5 @@ handler = Mangum(
 
 if "AWS_EXECUTION_ENV" in os.environ and not _CONNECTIONS_INITIALIZED:
     logger.info("Cold start: initializing database connection")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(
-        connect_to_db(
-            app,
-            postgres_settings=_build_postgres_settings(),
-            add_write_connection_pool=WITH_COLLECTION_TRANSACTIONS,
-        )
-    )
-    _CONNECTIONS_INITIALIZED = True
+    _initialize_db_connections_sync()
     logger.info("Database connection initialized")

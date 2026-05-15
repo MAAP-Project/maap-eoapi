@@ -12,35 +12,34 @@ from pydantic import ValidationError
 
 from eoapi.stac import auth
 from eoapi.stac.main import COLLECTION_TRANSACTION_EXTENSION, create_app
-from eoapi.stac.settings import TransactionAuthSettings
 
 
 @pytest.fixture(autouse=True)
 def reload_transaction_auth_settings() -> None:
     """Refresh auth settings after env changes in each test."""
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    auth.reset_transaction_auth_state()
     yield
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    auth.reset_transaction_auth_state()
 
 
 @pytest.fixture
 def basic_auth_secret_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure basic auth to read credentials from Secrets Manager."""
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_MODE_ENV, "basic")
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_SECRET_ARN_ENV, "test-secret-arn")
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_USERNAME_ENV, raising=False)
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_PASSWORD_ENV, raising=False)
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_MODE", "basic")
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_SECRET_ARN", "test-secret-arn")
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_USERNAME", raising=False)
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_PASSWORD", raising=False)
+    auth.reset_transaction_auth_state()
 
 
 @pytest.fixture
 def basic_auth_env_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure basic auth to read credentials directly from env vars."""
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_MODE_ENV, "basic")
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_SECRET_ARN_ENV, raising=False)
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_USERNAME_ENV, "bob")
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_PASSWORD_ENV, "builder")
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_MODE", "basic")
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_SECRET_ARN", raising=False)
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_USERNAME", "bob")
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_PASSWORD", "builder")
+    auth.reset_transaction_auth_state()
 
 
 @pytest.fixture
@@ -152,11 +151,11 @@ def test_transaction_enabled_app_fails_closed_without_any_basic_auth_credentials
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Missing basic-auth config should fail app creation."""
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_MODE_ENV, "basic")
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_SECRET_ARN_ENV, raising=False)
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_USERNAME_ENV, raising=False)
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_PASSWORD_ENV, raising=False)
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_MODE", "basic")
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_SECRET_ARN", raising=False)
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_USERNAME", raising=False)
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_PASSWORD", raising=False)
+    auth.reset_transaction_auth_state()
 
     with pytest.raises(RuntimeError, match="MAAP_TRANSACTION_AUTH_USERNAME"):
         create_app(
@@ -169,8 +168,8 @@ def test_transaction_enabled_app_fails_closed_for_unsupported_auth_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Unsupported auth modes should fail app creation."""
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_MODE_ENV, "none")
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_SECRET_ARN_ENV, "test-secret-arn")
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_MODE", "none")
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_SECRET_ARN", "test-secret-arn")
 
     with pytest.raises(ValidationError, match="Input should be 'basic'"):
-        auth.transaction_auth_settings = TransactionAuthSettings()
+        auth.reset_transaction_auth_state()

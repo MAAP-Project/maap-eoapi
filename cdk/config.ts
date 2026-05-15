@@ -11,11 +11,12 @@ function parseOptionalBooleanEnv(name: string): boolean | undefined {
     return undefined;
   }
 
-  if (value === "true") {
+  const normalizedValue = value.trim().toLowerCase();
+  if (normalizedValue === "true") {
     return true;
   }
 
-  if (value === "false") {
+  if (normalizedValue === "false") {
     return false;
   }
 
@@ -194,7 +195,7 @@ export class Config {
       "USER_STAC_COLLECTION_TRANSACTIONS_ENABLED",
     );
 
-    if (!enabled) {
+    if (enabled !== true) {
       return undefined;
     }
 

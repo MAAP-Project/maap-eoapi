@@ -7,25 +7,24 @@ from fastapi.testclient import TestClient
 
 from eoapi.stac import auth
 from eoapi.stac.main import COLLECTION_TRANSACTION_EXTENSION, create_app, parse_enabled_extensions
-from eoapi.stac.settings import TransactionAuthSettings
 
 
 @pytest.fixture(autouse=True)
 def reload_transaction_auth_settings() -> None:
     """Refresh auth settings after env changes in each test."""
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    auth.reset_transaction_auth_state()
     yield
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    auth.reset_transaction_auth_state()
 
 
 @pytest.fixture
 def collection_transaction_app(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """Build a test client with collection transactions enabled."""
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_MODE_ENV, "basic")
-    monkeypatch.delenv(auth.MAAP_TRANSACTION_AUTH_SECRET_ARN_ENV, raising=False)
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_USERNAME_ENV, "bob")
-    monkeypatch.setenv(auth.MAAP_TRANSACTION_AUTH_PASSWORD_ENV, "builder")
-    auth.transaction_auth_settings = TransactionAuthSettings()
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_MODE", "basic")
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_SECRET_ARN", raising=False)
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_USERNAME", "bob")
+    monkeypatch.setenv("MAAP_TRANSACTION_AUTH_PASSWORD", "builder")
+    auth.reset_transaction_auth_state()
     app = create_app(
         enabled_extensions={"query", "sort", "collection_search", COLLECTION_TRANSACTION_EXTENSION},
         connect_to_database=False,

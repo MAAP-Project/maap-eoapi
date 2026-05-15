@@ -77,7 +77,7 @@ describe("PgStacInfra STAC runtime wiring", () => {
     });
 
     template.hasResourceProperties("AWS::Lambda::Function", {
-      Handler: "handler.handler",
+      Handler: "eoapi.stac.handler.handler",
       Environment: {
         Variables: Match.objectLike({
           STAC_FASTAPI_TITLE: "MAAP public STAC API (test)",
@@ -122,7 +122,7 @@ describe("PgStacInfra STAC runtime wiring", () => {
     });
 
     template.hasResourceProperties("AWS::Lambda::Function", {
-      Handler: "handler.handler",
+      Handler: "eoapi.stac.handler.handler",
       Environment: {
         Variables: Match.objectLike({
           ENABLED_EXTENSIONS:
@@ -166,7 +166,7 @@ describe("PgStacInfra STAC runtime wiring", () => {
       ),
     ).toHaveLength(0);
     template.hasResourceProperties("AWS::Lambda::Function", {
-      Handler: "handler.handler",
+      Handler: "eoapi.stac.handler.handler",
       Environment: {
         Variables: Match.objectLike({
           MAAP_TRANSACTION_AUTH_SECRET_ARN:
