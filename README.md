@@ -14,7 +14,7 @@ Deployment happens through a github workflow manually triggered and defined in `
 
 ## User STAC collection transactions
 
-The internal `userSTAC` deployment can now opt into collection-only STAC transactions.
+The internal `userSTAC` deployment can now opt into collection-only STAC transactions. The public-facing stack stays on the same MAAP-owned runtime, but remains read-only unless transaction support is explicitly enabled.
 
 Enable them with:
 
@@ -26,6 +26,22 @@ When enabled, this CDK stack creates and manages the Secrets Manager secret used
 - `/maap-eoapi/<stage>/internal/stac-collection-transaction-auth-secret-arn`
 
 You can still override the secret with `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN` if you need to point at an existing secret instead.
+
+The transaction auth secret must be a JSON object with string `username` and `password` fields.
+
+### What to verify after deployment
+
+For a transaction-enabled internal deployment, verify:
+
+- `GET /conformance` includes `https://api.stacspec.org/v1.0.0/collections/extensions/transaction`
+- OpenAPI advertises collection write routes only:
+  - `POST /collections`
+  - `PUT /collections/{collection_id}`
+  - `PATCH /collections/{collection_id}`
+  - `DELETE /collections/{collection_id}`
+- unauthenticated collection writes return `401`
+- authenticated collection writes succeed
+- item write routes are absent from the contract and return `404` or `405` rather than exposing item transaction behavior
 
 
 ## Networking and accessibility of the database. 

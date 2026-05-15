@@ -25,6 +25,16 @@ The secret form is intended for Lambda deployments. The username/password env-va
 
 The secret must be a JSON object with `username` and `password` string fields.
 
+### Running tests
+
+From this directory, run:
+
+```bash
+uv run pytest
+```
+
+These tests cover app construction, OpenAPI and conformance output, auth behavior, and the custom Lambda handler lifecycle.
+
 ### Environment shape
 
 The local STAC service uses the same pgSTAC-style environment variables already used elsewhere in eoapi development:
@@ -59,3 +69,13 @@ The local raster service also expects mosaic settings, so the compose file provi
 - The Lambda runtime entrypoint is `eoapi.stac.handler.handler` and preserves the upstream SnapStart-aware connection lifecycle.
 - Collection write-route auth is attached with FastAPI security dependencies on `POST /collections` plus `PUT`, `PATCH`, and `DELETE /collections/{collection_id}`.
 - Those dependencies are declared as HTTP Basic auth in OpenAPI, so Swagger UI shows the protected routes with the built-in auth flow instead of relying only on the browser challenge popup.
+
+### Post-deploy smoke checks
+
+For a transaction-enabled deployment, verify:
+
+- `GET /conformance` advertises only the collection transaction conformance class.
+- OpenAPI includes collection write routes and does not advertise item transaction write routes.
+- `POST /collections` without auth returns `401` with `WWW-Authenticate: Basic`.
+- Authenticated `POST`, `PUT`, `PATCH`, and `DELETE` requests against `/collections` succeed when the backing pgSTAC deployment is healthy.
+- Item write routes such as `POST /collections/{collection_id}/items` remain unavailable.
