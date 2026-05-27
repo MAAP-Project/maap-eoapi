@@ -210,6 +210,18 @@ def test_startup_event_connects_with_expected_write_pool_setting(
     }
 
 
+def test_handler_uses_specific_text_mime_types() -> None:
+    """Mangum should treat expected text-based API types as non-binary."""
+    assert handler.handler.config["text_mime_types"] == [
+        "text/",
+        "application/json",
+        "application/geo+json",
+        "application/xml",
+        "application/vnd.api+json",
+        "application/vnd.oai.openapi",
+    ]
+
+
 def test_shutdown_event_closes_db_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

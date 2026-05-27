@@ -33,6 +33,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+TEXT_MIME_TYPES = [
+    "text/",
+    "application/json",
+    "application/geo+json",
+    "application/xml",
+    "application/vnd.api+json",
+    "application/vnd.oai.openapi",
+]
+
 _CONNECTIONS_INITIALIZED = False
 WITH_COLLECTION_TRANSACTIONS = (
     COLLECTION_TRANSACTION_EXTENSION
@@ -146,7 +155,7 @@ async def shutdown_event() -> None:
 handler = Mangum(
     app,
     lifespan="off",
-    text_mime_types=["text/", "application/"],
+    text_mime_types=TEXT_MIME_TYPES,
 )
 
 
