@@ -1,0 +1,116 @@
+services:
+  stac:
+    platform: linux/amd64
+    build:
+      context: ./cdk
+      dockerfile: dockerfiles/Dockerfile.stac
+      target: local
+    entrypoint:
+      - /bin/bash
+      - -lc
+    ports:
+      - "${MY_DOCKER_IP:-127.0.0.1}:8081:8081"
+    volumes:
+      - ./cdk/runtimes/eoapi/stac:/workspace
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /workspace:/asset
+      POSTGRES_USER: username
+      POSTGRES_PASS: password
+      POSTGRES_DBNAME: postgis
+      POSTGRES_HOST_READER: database
+      POSTGRES_HOST_WRITER: database
+      POSTGRES_PORT: "5432"
+      DB_MIN_CONN_SIZE: "1"
+      DB_MAX_CONN_SIZE: "1"
+      ENABLED_EXTENSIONS: query,sort,fields,filter,free_text,pagination,collection_search,collection_transaction
+      TITILER_ENDPOINT: http://raster:8082
+      STAC_FASTAPI_TITLE: MAAP Local STAC API
+      STAC_FASTAPI_LANDING_ID: maap-stac-api-local
+      STAC_FASTAPI_DESCRIPTION: Local deployment of the MAAP STAC API
+      STAC_FASTAPI_VERSION: 0.1.0
+      MAAP_TRANSACTION_AUTH_MODE: ${MAAP_TRANSACTION_AUTH_MODE:-basic}
+      MAAP_TRANSACTION_AUTH_USERNAME: ${MAAP_TRANSACTION_AUTH_USERNAME:-username}
+      MAAP_TRANSACTION_AUTH_PASSWORD: ${MAAP_TRANSACTION_AUTH_PASSWORD:-password}
+      MAAP_TRANSACTION_AUTH_SECRET_ARN: ${MAAP_TRANSACTION_AUTH_SECRET_ARN:-}
+    env_file:
+      - path: .env
+        required: false
+      - path: .stac.env
+        required: false
+    depends_on:
+      - database
+      - raster
+    command:
+      - >-
+        until (echo > /dev/tcp/database/5432) >/dev/null 2>&1; do sleep 1; done
+        && python -m uvicorn eoapi.stac.main:app --host 0.0.0.0 --port 8081
+        --workers 1 --reload --reload-dir /workspace/eoapi/stac
+
+  raster:
+    platform: linux/amd64
+    build:
+      context: ./cdk
+      dockerfile: dockerfiles/Dockerfile.raster
+      target: local
+    entrypoint:
+      - /bin/bash
+      - -lc
+    ports:
+      - "${MY_DOCKER_IP:-127.0.0.1}:8082:8082"
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /asset
+      POSTGRES_USER: username
+      POSTGRES_PASS: password
+      POSTGRES_DBNAME: postgis
+      POSTGRES_HOST: database
+      POSTGRES_PORT: "5432"
+      DB_MIN_CONN_SIZE: "1"
+      DB_MAX_CONN_SIZE: "10"
+      CPL_TMPDIR: /tmp
+      GDAL_CACHEMAX: 75%
+      GDAL_INGESTED_BYTES_AT_OPEN: "32768"
+      GDAL_DISABLE_READDIR_ON_OPEN: EMPTY_DIR
+      GDAL_HTTP_MERGE_CONSECUTIVE_RANGES: "YES"
+      GDAL_HTTP_MULTIPLEX: "YES"
+      GDAL_HTTP_VERSION: "2"
+      VSI_CACHE: "TRUE"
+      VSI_CACHE_SIZE: "536870912"
+      MOSAIC_BACKEND: dynamodb://
+      MOSAIC_HOST: ${MOSAIC_HOST:-localhost}
+      MOSAIC_CONCURRENCY: "1"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+    env_file:
+      - path: .env
+        required: false
+      - path: .raster.env
+        required: false
+    depends_on:
+      - database
+    command:
+      - >-
+        until (echo > /dev/tcp/database/5432) >/dev/null 2>&1; do sleep 1; done
+        && python -m uvicorn eoapi.raster.main:app --host 0.0.0.0 --port 8082
+        --workers 1
+
+  database:
+    image: ghcr.io/stac-utils/pgstac:v0.9.9
+    ports:
+      - "${MY_DOCKER_IP:-127.0.0.1}:5439:5432"
+    environment:
+      POSTGRES_USER: username
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgis
+      PGUSER: username
+      PGPASSWORD: password
+      PGDATABASE: postgis
+    command: postgres -N 500
+    volumes:
+      - ./.pgdata:/var/lib/postgresql/data
+
+networks:
+  default:
+    name: maap-eoapi

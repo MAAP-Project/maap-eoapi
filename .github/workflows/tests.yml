@@ -1,75 +1,71 @@
-name: tests
+name: Unit and runtime tests
 
 permissions:
-    id-token: write  # required for requesting the JWT
-    contents: read  # required for actions/checkout
+  contents: read
 
 on:
-    # Uncomment below for running it manually on the github UI
-    workflow_dispatch:
-
-    # Uncomment below for running it on a push in a specific branch
-    # push:
-    #     branches:
-    #         - "change-stac-api-url-stage"
-
-    # Uncomment below for running it as a cron job
-    # schedule:
-    #    - cron: '15 16 * * 5'
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-    python-job:
-        name: "PyTest tests"
-        runs-on: ubuntu-latest
-        strategy:
-          matrix:
-            include:
-              - environment: test
-              - environment: dev
-        environment: ${{ matrix.environment }}
+  node-tests:
+    name: node-tests
+    runs-on: ubuntu-latest
 
-        steps:
-          - name: Checkout repository
-            uses: actions/checkout@v3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-          - name: Setup Python
-            uses: actions/setup-python@v3
-            with:
-                python-version: '3.12'
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: npm
 
-          - name: Assume Github OIDC role
-            uses: aws-actions/configure-aws-credentials@v2
-            with:
-                aws-region: us-west-2
-                role-to-assume: ${{ vars.MAAP_EOAPI_TEST_ROLE }}
-                role-session-name: maap-eoapi-tests-${{ matrix.environment }}
+      - name: Install dependencies
+        run: npm ci
 
-          - name: Install dependencies
-            run: |
-                python -m pip install --upgrade pip
-                pip install -r tests/requirements.txt
+      - name: Run tests
+        run: npm test
 
-          - name: Run pytest
-            env:
-                INGESTOR_DOMAIN_NAME: ${{ vars.INGESTOR_DOMAIN_NAME }}
-                STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.STAC_API_CUSTOM_DOMAIN_NAME }}
-                TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
-                SECRET_ID: ${{ vars.SECRET_ID }}
-            run: |
-                pytest tests
+  python-runtime-tests:
+    name: pytest (${{ matrix.runtime.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime:
+          - name: eoapi-stac
+            path: cdk/runtimes/eoapi/stac
+          - name: dps-stac-item-generator
+            path: cdk/constructs/DpsStacItemGenerator/runtime
 
-          - name: slack
-            if: always()
-            id: slack
-            uses: slackapi/slack-github-action@v1.24.0
-            with:
-              # Slack channel id, channel name, or user id to post message.
-              # See also: https://api.slack.com/methods/chat.postMessage#channels
-              # You can pass in multiple channels to post to by providing a comma-delimited list of channel IDs.
-              channel-id: ${{ vars.SLACK_CHANNEL_ID }}
-              # For posting a simple plain text message
-              slack-message: "GitHub build result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
-            env:
-              SLACK_BOT_TOKEN: ${{ vars.SLACK_BOT_TOKEN }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.runtime.path }}
 
-          
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Run pytest
+        run: uv run pytest

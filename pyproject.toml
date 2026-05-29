@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 [tool.uv.sources]
 dps-stac-item-generator = { path = "cdk/constructs/DpsStacItemGenerator/runtime" }
 eoapi-raster = { path = "cdk/runtimes/eoapi/raster" }
+eoapi-stac = { path = "cdk/runtimes/eoapi/stac" }
 
 
 [dependency-groups]

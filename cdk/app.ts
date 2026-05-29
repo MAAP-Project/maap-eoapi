@@ -30,6 +30,7 @@ const {
   userStacCollectionIdRegistry,
   userStacInboundTopicArns,
   userStacItemGenRoleArn,
+  userStacCollectionTransactions,
   userStacStacApiCustomDomainName,
   userStacTitilerPgStacApiCustomDomainName,
   version,
@@ -108,6 +109,7 @@ const userInfrastructure = new PgStacInfra(app, buildStackName("userSTAC"), {
   },
   stacApiConfig: {
     customDomainName: userStacStacApiCustomDomainName,
+    transactions: userStacCollectionTransactions,
   },
   titilerPgstacConfig: {
     mosaicHost,

@@ -8,6 +8,7 @@ __pycache__
 .venv
 .env
 .envrc
+.env-test
 .test-env
 .DS_Store
 
@@ -17,3 +18,8 @@ cdk.out
 
 # potentially installed packages
 stac-browser/
+
+# local docker compose state
+.pgdata/
+
+dev-docs/plans/
