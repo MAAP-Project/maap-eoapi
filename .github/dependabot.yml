@@ -21,3 +21,14 @@ updates:
           - "*"
     cooldown:
       default-days: 30
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      node-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 30
