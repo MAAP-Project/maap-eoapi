@@ -344,9 +344,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aws-cdk-lib", specifier = ">=2.220.0" },
-    { name = "constructs", specifier = ">=10.3.0" },
-    { name = "eoapi-cdk", specifier = ">=11.5.0" },
+    { name = "aws-cdk-lib", specifier = ">=2.259.0" },
+    { name = "constructs", specifier = ">=10.6.0" },
+    { name = "eoapi-cdk", specifier = ">=11.6.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
