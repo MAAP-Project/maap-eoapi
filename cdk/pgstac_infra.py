@@ -173,9 +173,9 @@ class PgStacInfra(Stack):
                 "update_collection_extent": True,
                 "use_queue": True,
             },
-            bootstrapper_lambda_function_options=eoapi_cdk.CustomLambdaFunctionProps(
-                timeout=Duration.minutes(15)
-            ),
+            bootstrapper_lambda_function_options={
+                "timeout": Duration.minutes(15)
+            },
             parameters={"shared_preload_libraries": "pg_cron"},
         )
 
@@ -265,15 +265,15 @@ class PgStacInfra(Stack):
             ),
         }
 
-        stac_api_lambda_options = eoapi_cdk.CustomLambdaFunctionProps(
-            code=lambda_.Code.from_docker_build(
+        stac_api_lambda_options = {
+            "code": lambda_.Code.from_docker_build(
                 str(_CDK_DIR),
                 file="dockerfiles/Dockerfile.stac",
                 target_stage="lambda",
                 build_args={"PYTHON_VERSION": "3.12"},
             ),
-            handler="eoapi.stac.handler.handler",
-        )
+            "handler": "eoapi.stac.handler.handler",
+        }
 
         # ── STAC API ───────────────────────────────────────────────────────
         stac_api_domain_name = (
@@ -344,16 +344,16 @@ class PgStacInfra(Stack):
         with open(titiler_pgstac_config.buckets_path, "r") as f:
             buckets: list[str] = yaml.safe_load(f)
 
-        titiler_pgstac_lambda_options = eoapi_cdk.CustomLambdaFunctionProps(
-            code=lambda_.Code.from_docker_build(
+        titiler_pgstac_lambda_options = {
+            "code": lambda_.Code.from_docker_build(
                 str(_CDK_DIR),
                 file="dockerfiles/Dockerfile.raster",
                 target_stage="lambda",
                 build_args={"PYTHON_VERSION": "3.12"},
             ),
-            handler="handler.handler",
-            role=titiler_data_access_role,
-        )
+            "handler": "handler.handler",
+            "role": titiler_data_access_role,
+        }
 
         titiler_pgstac_api_env: dict[str, str] = {
             "NAME": f"MAAP titiler pgstac API ({stage})",
