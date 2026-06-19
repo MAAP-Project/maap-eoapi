@@ -245,8 +245,9 @@ class PgStacInfra(Stack):
             "free_text",
             "pagination",
             "collection_search",
-            *(["collection_transaction"] if transactions_config else []),
         ]
+        if transaction_config:
+            stac_enabled_extensions.append("collection_transaction")
 
         stac_api_env: dict[str, str] = {
             "STAC_FASTAPI_TITLE": f"MAAP {type} STAC API ({stage})",
