@@ -11,6 +11,7 @@ from aws_cdk import (
     Duration,
     RemovalPolicy,
     Stack,
+    aws_apigateway as apigateway,
     aws_apigatewayv2 as apigatewayv2,
     aws_certificatemanager as acm,
     aws_cloudfront as cloudfront,
@@ -542,7 +543,7 @@ class PgStacInfra(Stack):
             )
 
             ingestor_domain_name_options = (
-                eoapi_cdk.IngestorDomainNameOptions(
+                apigateway.DomainNameOptions(
                     domain_name=ingestor_config.domain_name,
                     certificate=acm.Certificate.from_certificate_arn(
                         self,
