@@ -25,43 +25,24 @@ _CONSTRUCT_DIR = Path(__file__).parent / "DpsStacItemGenerator"
 @dataclass
 class DpsStacItemGeneratorProps:
     item_load_topic_arn: str
-    """ARN of the SNS topic to publish generated items to. Typically the topic from a StacLoader construct."""
     role_arn: str
-    """ARN of the IAM role assumed by the item generation Lambda."""
     vpc: Optional[ec2.IVpc] = None
-    """VPC into which the Lambda should be deployed."""
     subnet_selection: Optional[ec2.SubnetSelection] = None
-    """Subnet into which the Lambda should be deployed."""
     lambda_runtime: Optional[lambda_.Runtime] = None
-    """Lambda runtime to use. Default: PYTHON_3_12."""
     lambda_timeout_seconds: Optional[int] = None
-    """Timeout for the item generation Lambda in seconds. The SQS visibility timeout is set to this plus 10s. Default: 120."""
     memory_size: Optional[int] = None
-    """Memory size for the Lambda function in MB. Default: 1024."""
     max_concurrency: Optional[int] = None
-    """Maximum number of concurrent Lambda executions. Default: 100."""
     batch_size: Optional[int] = None
-    """SQS batch size for the Lambda event source. Default: 10."""
     environment: Optional[dict[str, str]] = None
-    """Additional environment variables merged with defaults (ITEM_LOAD_TOPIC_ARN, LOG_LEVEL)."""
     inbound_topic_arns: Optional[list[str]] = None
-    """ARNs of externally-managed SNS topics that trigger item generation. The SQS queue subscribes to each. Default: []."""
     user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
-    """Registry mapping collection ID patterns to authorized usernames. Keys support glob wildcards.
-    Example: {"my-collection": ["user1", "user2"], "maap-*": ["user3"]}
-    Default: {} (all items receive the deterministic collection ID).
-    """
     stage: Optional[str] = None
-    """Deployment stage used for naming CloudFormation exports. Default: "default"."""
 
 
 class DpsStacItemGenerator(Construct):
     queue: sqs.Queue
-    """SQS queue that buffers item generation requests from SNS."""
     dead_letter_queue: sqs.Queue
-    """Dead letter queue for messages that fail processing after 5 attempts."""
     lambda_function: lambda_.Function
-    """Lambda function that generates STAC items from DPS job outputs."""
 
     def __init__(
         self,

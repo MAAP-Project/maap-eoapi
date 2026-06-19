@@ -40,79 +40,44 @@ _CDK_DIR = Path(__file__).parent
 @dataclass
 class PgStacDbConfig:
     instance_type: ec2.InstanceType
-    """RDS instance type."""
     pgstac_version: str
-    """Version of pgstac to install on the database."""
     allocated_storage: int
-    """Allocated storage for the pgstac database."""
     subnet_public: bool
-    """Flag to control whether the database should be deployed into a public subnet."""
 
 
 @dataclass
 class TitilerPgstacConfig:
     buckets_path: str
-    """YAML file containing the list of buckets the titiler lambda should be granted access to."""
     data_access_role_arn: str
-    """ARN of IAM role that will be assumed by the titiler Lambda."""
     mosaic_host: Optional[str] = None
-    """mosaicjson DynamoDB host for titiler, in the form of aws-region/table-name."""
     custom_domain_name: Optional[str] = None
-    """Domain name to use for titiler pgstac API. If defined, a new custom domain name will be created.
-    Example: "titiler-pgstac-api.dit.maap-project.org"
-    """
 
 
 @dataclass
 class CollectionTransactionsConfig:
     auth_mode: str  # "basic" | "jwt"
-    """Authentication mode for collection transactions."""
     auth_secret_arn: Optional[str] = None
-    """ARN of the Secrets Manager secret containing the auth credentials."""
 
 
 @dataclass
 class StacApiConfig:
     custom_domain_name: Optional[str] = None
-    """Domain name to use for the STAC API. If defined, a new custom domain will be created.
-    Example: "stac-api.dit.maap-project.org"
-    """
     integration_api_arn: Optional[str] = None
-    """STAC API API Gateway source ARN to be granted STAC API lambda invoke permission."""
     transactions: Optional[CollectionTransactionsConfig] = None
-    """Optional collection transaction support. When omitted, the API stays read-only."""
-
 
 @dataclass
 class StacBrowserConfig:
     repo_tag: str
-    """Tag of the stac-browser repo from https://github.com/radiantearth/stac-browser.
-    Example: "v3.2.0"
-    """
     custom_domain_name: str
-    """Domain name for use in CloudFront distribution for stac-browser.
-    Example: "stac-browser.maap-project.org"
-    """
     certificate_arn: str
-    """ARN of ACM certificate to use for the CloudFront Distribution (must be us-east-1).
-    Example: "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
-    """
 
 
 @dataclass
 class IngestorConfig:
     jwks_url: str
-    """URL of JWKS endpoint, provided as output from ASDI-Auth.
-    Example: "https://cognito-idp.{region}.amazonaws.com/{region}_{userpool_id}/.well-known/jwks.json"
-    """
     data_access_role_arn: str
-    """ARN of IAM role that will be assumed by the STAC Ingestor."""
     user_data_path: str
-    """Path to userdata.yaml."""
     domain_name: Optional[str] = None
-    """Domain name to use for CDN. If defined, a new CDN will be created.
-    Example: "stac.maap.xyz"
-    """
 
 
 @dataclass
