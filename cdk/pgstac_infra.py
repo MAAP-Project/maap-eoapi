@@ -211,7 +211,7 @@ class PgStacInfra(Stack):
             "pagination",
             "collection_search",
         ]
-        if transaction_config:
+        if transactions_config:
             stac_enabled_extensions.append("collection_transaction")
 
         stac_api_env: dict[str, str] = {
