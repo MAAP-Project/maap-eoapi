@@ -7,7 +7,6 @@ import boto3
 
 
 class StacIngestion:
-
     """Class representing various test operations"""
 
     def __init__(self):

@@ -1,4 +1,5 @@
 """Tests for PgStacInfra stack - Python equivalent of test/pgstac-infra.test.ts"""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -60,7 +61,7 @@ def build_template(overrides: dict | None = None) -> assertions.Template:
         stac_api_config=StacApiConfig(custom_domain_name="stac-api.example.com"),
         titiler_pgstac_config=BASE_TITILER_CONFIG,
     )
-    props |= (overrides or {})
+    props |= overrides or {}
 
     # Mock lambda Code.from_docker_build so tests don't need Docker
     mock_code = cdk.aws_lambda.Code.from_asset("test")
