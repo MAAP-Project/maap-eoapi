@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +25,16 @@ from aws_cdk import (
     aws_secretsmanager as secretsmanager,
     aws_ssm as ssm,
 )
+
+from .config import (
+    PgStacDbConfig,
+    TitilerPgstacConfig,
+    StacApiConfig,
+    StacBrowserConfig,
+    IngestorConfig,
+    DpsStacItemGenConfig,
+)
+
 from constructs import Construct
 
 import eoapi_cdk
@@ -35,56 +45,6 @@ from .constructs.dps_stac_item_generator import (
 )
 
 _CDK_DIR = Path(__file__).parent
-
-
-@dataclass
-class PgStacDbConfig:
-    instance_type: ec2.InstanceType
-    pgstac_version: str
-    allocated_storage: int
-    subnet_public: bool
-
-
-@dataclass
-class TitilerPgstacConfig:
-    buckets_path: str
-    data_access_role_arn: str
-    mosaic_host: Optional[str] = None
-    custom_domain_name: Optional[str] = None
-
-
-@dataclass
-class CollectionTransactionsConfig:
-    auth_mode: str  # "basic" | "jwt"
-    auth_secret_arn: Optional[str] = None
-
-
-@dataclass
-class StacApiConfig:
-    custom_domain_name: Optional[str] = None
-    integration_api_arn: Optional[str] = None
-    transactions: Optional[CollectionTransactionsConfig] = None
-
-@dataclass
-class StacBrowserConfig:
-    repo_tag: str
-    custom_domain_name: str
-    certificate_arn: str
-
-
-@dataclass
-class IngestorConfig:
-    jwks_url: str
-    data_access_role_arn: str
-    user_data_path: str
-    domain_name: Optional[str] = None
-
-
-@dataclass
-class DpsStacItemGenConfig:
-    item_gen_role_arn: str
-    inbound_topic_arns: Optional[list[str]] = None
-    user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
 
 
 class PgStacInfra(Stack):
@@ -102,8 +62,12 @@ class PgStacInfra(Stack):
         pgstac_db_config: PgStacDbConfig,
         titiler_pgstac_config: TitilerPgstacConfig,
         stac_api_config: StacApiConfig,
-        certificate_arn: Optional[str] = None,  # ARN of ACM certificate for eoAPI custom domains.
-        stac_browser_config: Optional[StacBrowserConfig] = None,  # Omit to skip STAC Browser.
+        certificate_arn: Optional[
+            str
+        ] = None,  # ARN of ACM certificate for eoAPI custom domains.
+        stac_browser_config: Optional[
+            StacBrowserConfig
+        ] = None,  # Omit to skip STAC Browser.
         ingestor_config: Optional[IngestorConfig] = None,  # Omit to skip STAC Ingestor.
         dps_stac_item_gen_config: Optional[DpsStacItemGenConfig] = None,
         add_stactools_item_generator: Optional[bool] = None,
@@ -139,9 +103,7 @@ class PgStacInfra(Stack):
                 "update_collection_extent": True,
                 "use_queue": True,
             },
-            bootstrapper_lambda_function_options={
-                "timeout": Duration.minutes(15)
-            },
+            bootstrapper_lambda_function_options={"timeout": Duration.minutes(15)},
             parameters={"shared_preload_libraries": "pg_cron"},
         )
 
@@ -625,9 +587,7 @@ class PgStacInfra(Stack):
                     actions=["s3:GetObject"],
                     principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
                     resources=[stac_browser_bucket.arn_for_objects("*")],
-                    conditions={
-                        "StringEquals": {"aws:SourceArn": distribution_arn}
-                    },
+                    conditions={"StringEquals": {"aws:SourceArn": distribution_arn}},
                 )
             )
 
@@ -638,9 +598,7 @@ class PgStacInfra(Stack):
                     actions=["s3:PutObject"],
                     resources=[log_bucket.arn_for_objects("AWSLogs/*")],
                     principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
-                    conditions={
-                        "StringEquals": {"aws:SourceArn": distribution_arn}
-                    },
+                    conditions={"StringEquals": {"aws:SourceArn": distribution_arn}},
                 )
             )
 

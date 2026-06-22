@@ -1,15 +1,67 @@
 from __future__ import annotations
 
 from typing import Literal, Optional
-
+from dataclasses import dataclass
 from aws_cdk import aws_ec2 as ec2
-from pydantic import AliasChoices, BaseModel, Field, computed_field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class CollectionTransactionsConfig(BaseModel):
+@dataclass
+class PgStacDbConfig:
+    instance_type: ec2.InstanceType
+    pgstac_version: str
+    allocated_storage: int
+    subnet_public: bool
+
+
+@dataclass
+class TitilerPgstacConfig:
+    buckets_path: str
+    data_access_role_arn: str
+    mosaic_host: Optional[str] = None
+    custom_domain_name: Optional[str] = None
+
+
+@dataclass
+class CollectionTransactionsConfig:
     auth_mode: Literal["basic", "jwt"]
     auth_secret_arn: Optional[str] = None
+
+
+@dataclass
+class StacApiConfig:
+    custom_domain_name: Optional[str] = None
+    integration_api_arn: Optional[str] = None
+    transactions: Optional[CollectionTransactionsConfig] = None
+
+
+@dataclass
+class StacBrowserConfig:
+    repo_tag: str
+    custom_domain_name: str
+    certificate_arn: str
+
+
+@dataclass
+class IngestorConfig:
+    jwks_url: str
+    data_access_role_arn: str
+    user_data_path: str
+    domain_name: Optional[str] = None
+
+
+@dataclass
+class DpsStacItemGenConfig:
+    item_gen_role_arn: str
+    inbound_topic_arns: Optional[list[str]] = None
+    user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
 
 
 class Config(BaseSettings):
