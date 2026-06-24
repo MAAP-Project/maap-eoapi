@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
-from typing import cast
+from typing import Any, cast
+from urllib.parse import urljoin
 
+import attr
 from brotli_asgi import BrotliMiddleware
 from eoapi.stac.auth import build_transaction_route_dependencies
 from eoapi.stac.transactions import CollectionTransactionExtension
 from fastapi import APIRouter, FastAPI
+from fastapi.params import Depends
 from stac_fastapi.api.app import StacApi
 from stac_fastapi.api.middleware import ProxyHeaderMiddleware
 from stac_fastapi.api.models import (
@@ -20,8 +23,7 @@ from stac_fastapi.api.models import (
     create_post_request_model,
     create_request_model,
 )
-from stac_fastapi.api.routes import Scope
-from stac_fastapi.extensions.core import (
+from stac_fastapi.extensions import (
     CollectionSearchExtension,
     CollectionSearchFilterExtension,
     FieldsExtension,
@@ -31,25 +33,37 @@ from stac_fastapi.extensions.core import (
     SortExtension,
     TokenPaginationExtension,
 )
-from stac_fastapi.extensions.core.fields import FieldsConformanceClasses
-from stac_fastapi.extensions.core.free_text import FreeTextConformanceClasses
-from stac_fastapi.extensions.core.query import QueryConformanceClasses
-from stac_fastapi.extensions.core.sort import SortConformanceClasses
+from stac_fastapi.extensions.fields import FieldsConformanceClasses
+from stac_fastapi.extensions.free_text import FreeTextConformanceClasses
+from stac_fastapi.extensions.query import QueryConformanceClasses
+from stac_fastapi.extensions.sort import SortConformanceClasses
 from stac_fastapi.pgstac.config import Settings
 from stac_fastapi.pgstac.core import CoreCrudClient, health_check
 from stac_fastapi.pgstac.db import close_db_connection, connect_to_db
-from stac_fastapi.pgstac.extensions import FreeTextExtension, QueryExtension
+from stac_fastapi.pgstac.extensions import (
+    CatalogsDatabaseLogic,
+    FreeTextExtension,
+    QueryExtension,
+)
+from stac_fastapi.pgstac.extensions.catalogs.catalogs_client import CatalogsClient
 from stac_fastapi.pgstac.extensions.filter import FiltersClient
 from stac_fastapi.pgstac.transactions import TransactionsClient
 from stac_fastapi.pgstac.types.search import PgstacSearch
 from stac_fastapi.types.extension import ApiExtension
+from stac_fastapi.types.requests import get_base_url
 from stac_fastapi.types.search import APIRequest
+from stac_fastapi_catalogs_extension import (
+    CatalogsExtension,
+    CatalogsTransactionExtension,
+)
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
 settings = Settings()
 
 COLLECTION_TRANSACTION_EXTENSION = "collection_transaction"
+CATALOGS_EXTENSION = "catalogs"
+CATALOG_TRANSACTION_EXTENSION = "catalog_transaction"
 
 SEARCH_EXTENSIONS_MAP: dict[str, ApiExtension] = {
     "query": QueryExtension(),
@@ -85,19 +99,73 @@ DEFAULT_ENABLED_EXTENSIONS: set[str] = {
     *COLLECTION_SEARCH_EXTENSIONS_MAP.keys(),
     *ITEM_COLLECTION_EXTENSIONS_MAP.keys(),
     "collection_search",
+    CATALOGS_EXTENSION,
 }
 
 KNOWN_EXTENSIONS: set[str] = {
     *DEFAULT_ENABLED_EXTENSIONS,
     COLLECTION_TRANSACTION_EXTENSION,
+    CATALOG_TRANSACTION_EXTENSION,
 }
 
-TRANSACTION_ROUTE_SCOPES: list[Scope] = [
-    {"path": "/collections", "method": "POST"},
-    {"path": "/collections/{collection_id}", "method": "PUT"},
-    {"path": "/collections/{collection_id}", "method": "PATCH"},
-    {"path": "/collections/{collection_id}", "method": "DELETE"},
-]
+
+@attr.s
+class MaapCoreCrudClient(CoreCrudClient):
+    """MAAP core client with catalog-aware landing page links."""
+
+    catalogs_client: CatalogsClient | None = attr.ib(default=None, kw_only=True)
+
+    async def landing_page(self, **kwargs: Any) -> Any:
+        """Return the STAC landing page with catalogs exposed as children."""
+        landing_page = await super().landing_page(**kwargs)
+
+        if not self.extension_is_enabled("CatalogsExtension"):
+            return landing_page
+
+        if self.catalogs_client is None:
+            return landing_page
+
+        request = kwargs["request"]
+        base_url = get_base_url(request)
+        for link in landing_page["links"]:
+            if link.get("rel") == "catalogs":
+                link["href"] = urljoin(base_url, "catalogs")
+
+        catalogs, _, _ = await self.catalogs_client.database.get_all_catalogs(
+            token=None,
+            limit=1000,
+            request=request,
+        )
+
+        for catalog in catalogs:
+            catalog_id = catalog.get("id")
+            if not catalog_id:
+                continue
+            if catalog.get("parent_ids"):
+                continue
+
+            landing_page["links"].append(
+                {
+                    "rel": "child",
+                    "type": "application/json",
+                    "title": catalog.get("title", catalog_id),
+                    "href": urljoin(base_url, f"catalogs/{catalog_id}"),
+                }
+            )
+
+        return landing_page
+
+
+@attr.s
+class AuthenticatedCatalogsTransactionExtension(CatalogsTransactionExtension):
+    """Catalog transaction extension adapter with route-level dependencies."""
+
+    route_dependencies: list[Depends] = attr.ib(factory=list, kw_only=True)
+
+    def register(self, app: FastAPI) -> None:
+        """Register catalog write routes with auth dependencies on each route."""
+        self.router.dependencies = list(self.route_dependencies)
+        super().register(app)
 
 
 def parse_enabled_extensions(raw_value: str | None) -> set[str]:
@@ -136,14 +204,14 @@ def _build_middlewares() -> list[Middleware]:
     ]
 
 
-def _build_lifespan(with_collection_transactions: bool):
+def _build_lifespan(with_write_transactions: bool):
     """Build the FastAPI lifespan for local app execution."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await connect_to_db(
             app,
-            add_write_connection_pool=with_collection_transactions,
+            add_write_connection_pool=with_write_transactions,
         )
         yield
         await close_db_connection(app)
@@ -156,7 +224,7 @@ def create_app(
     enabled_extensions: set[str] | None = None,
     connect_to_database: bool = True,
 ) -> FastAPI:
-    """Create the MAAP STAC app with optional collection transactions."""
+    """Create the MAAP STAC app with optional catalog and collection transactions."""
     resolved_extensions = (
         enabled_extensions
         if enabled_extensions is not None
@@ -166,15 +234,27 @@ def create_app(
     with_collection_transactions = (
         COLLECTION_TRANSACTION_EXTENSION in resolved_extensions
     )
-    transaction_route_dependencies = []
+    with_catalogs = (
+        CATALOGS_EXTENSION in resolved_extensions or settings.enable_catalogs_extension
+    )
+    with_catalog_transactions = CATALOG_TRANSACTION_EXTENSION in resolved_extensions
+    with_write_transactions = with_collection_transactions or with_catalog_transactions
+    transaction_route_dependencies: list[Depends] = []
+    catalogs_client: CatalogsClient | None = None
+
+    if with_catalog_transactions and not with_catalogs:
+        raise ValueError("catalog_transaction requires catalogs in ENABLED_EXTENSIONS")
+
+    if with_write_transactions:
+        transaction_route_dependencies = build_transaction_route_dependencies()
 
     if with_collection_transactions:
-        transaction_route_dependencies = build_transaction_route_dependencies()
         application_extensions.append(
             CollectionTransactionExtension(
                 client=TransactionsClient(),
                 settings=settings,
                 response_class=JSONResponse,
+                route_dependencies=transaction_route_dependencies,
             )
         )
 
@@ -221,6 +301,26 @@ def create_app(
         collections_get_request_model = collection_search_extension.GET
         application_extensions.append(collection_search_extension)
 
+    if with_catalogs:
+        catalogs_client = CatalogsClient(database=CatalogsDatabaseLogic())
+        application_extensions.append(
+            CatalogsExtension(
+                client=catalogs_client,
+                settings={"enable_response_models": settings.enable_response_models},
+                hide_alternate_parents=settings.hide_alternate_parents,
+            )
+        )
+        if with_catalog_transactions:
+            application_extensions.append(
+                AuthenticatedCatalogsTransactionExtension(
+                    client=catalogs_client,
+                    settings={
+                        "enable_response_models": settings.enable_response_models
+                    },
+                    route_dependencies=transaction_route_dependencies,
+                )
+            )
+
     api = StacApi(
         app=FastAPI(
             openapi_url=settings.openapi_url,
@@ -231,7 +331,7 @@ def create_app(
             version=settings.stac_fastapi_version,
             description=settings.stac_fastapi_description,
             lifespan=(
-                _build_lifespan(with_collection_transactions)
+                _build_lifespan(with_write_transactions)
                 if connect_to_database
                 else None
             ),
@@ -239,7 +339,10 @@ def create_app(
         router=APIRouter(prefix=settings.prefix_path),
         settings=settings,
         extensions=application_extensions,
-        client=CoreCrudClient(pgstac_search_model=post_request_model),  # type: ignore[arg-type]
+        client=MaapCoreCrudClient(
+            pgstac_search_model=post_request_model,
+            catalogs_client=catalogs_client,
+        ),  # type: ignore[arg-type]
         response_class=JSONResponse,
         items_get_request_model=items_get_request_model,
         search_get_request_model=get_request_model,
@@ -248,11 +351,6 @@ def create_app(
         middlewares=_build_middlewares(),
         health_check=health_check,  # type: ignore[arg-type]
     )
-    if transaction_route_dependencies:
-        api.add_route_dependencies(
-            scopes=TRANSACTION_ROUTE_SCOPES,
-            dependencies=transaction_route_dependencies,
-        )
     return api.app
 
 

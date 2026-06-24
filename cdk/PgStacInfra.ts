@@ -91,18 +91,40 @@ export class PgStacInfra extends Stack {
     };
 
     const transactionsConfig = stacApiConfig.transactions;
+    const catalogsConfig = stacApiConfig.catalogs ?? { enabled: true };
+    const catalogsEnabled = catalogsConfig.enabled !== false;
+    const catalogTransactionsConfig = catalogsConfig.transactions;
+    if (catalogTransactionsConfig && !catalogsEnabled) {
+      throw new Error("STAC catalog transactions require catalogs to be enabled");
+    }
+
     if (transactionsConfig && transactionsConfig.authMode !== "basic") {
       throw new Error(
         `Unsupported STAC collection transaction auth mode: ${transactionsConfig.authMode}`,
       );
     }
+    if (catalogTransactionsConfig && catalogTransactionsConfig.authMode !== "basic") {
+      throw new Error(
+        `Unsupported STAC catalog transaction auth mode: ${catalogTransactionsConfig.authMode}`,
+      );
+    }
+    if (
+      transactionsConfig &&
+      catalogTransactionsConfig &&
+      transactionsConfig.authSecretArn !== catalogTransactionsConfig.authSecretArn
+    ) {
+      throw new Error(
+        "STAC collection and catalog transactions must use the same auth secret ARN",
+      );
+    }
 
-    const transactionAuthSecret = transactionsConfig
-      ? transactionsConfig.authSecretArn
+    const writeTransactionsConfig = transactionsConfig ?? catalogTransactionsConfig;
+    const transactionAuthSecret = writeTransactionsConfig
+      ? writeTransactionsConfig.authSecretArn
         ? secretsmanager.Secret.fromSecretCompleteArn(
             this,
             "stac-collection-transaction-auth-secret",
-            transactionsConfig.authSecretArn,
+            writeTransactionsConfig.authSecretArn,
           )
         : new secretsmanager.Secret(
             this,
@@ -129,7 +151,9 @@ export class PgStacInfra extends Stack {
       "free_text",
       "pagination",
       "collection_search",
+      ...(catalogsEnabled ? ["catalogs"] : []),
       ...(transactionsConfig ? ["collection_transaction"] : []),
+      ...(catalogTransactionsConfig ? ["catalog_transaction"] : []),
     ];
 
     const stacApiEnv: Record<string, string> = {
@@ -138,11 +162,12 @@ export class PgStacInfra extends Stack {
       STAC_FASTAPI_DESCRIPTION: `The ${type} STAC API for the [MAAP project](https://maap-project.org)`,
       STAC_FASTAPI_VERSION: version,
       ENABLED_EXTENSIONS: stacEnabledExtensions.join(","),
-      ...(transactionsConfig
+      ENABLE_CATALOGS_EXTENSION: catalogsEnabled ? "true" : "false",
+      HIDE_ALTERNATE_PARENTS: catalogsConfig.hideAlternateParents ? "true" : "false",
+      ...(writeTransactionsConfig
         ? {
-            MAAP_TRANSACTION_AUTH_MODE: transactionsConfig.authMode,
-            MAAP_TRANSACTION_AUTH_SECRET_ARN:
-              transactionAuthSecret!.secretArn,
+            MAAP_TRANSACTION_AUTH_MODE: writeTransactionsConfig.authMode,
+            MAAP_TRANSACTION_AUTH_SECRET_ARN: transactionAuthSecret!.secretArn,
           }
         : {}),
     };
@@ -197,7 +222,7 @@ export class PgStacInfra extends Stack {
       new ssm.StringParameter(this, "stac-collection-transaction-auth-secret-param", {
         parameterName: `/maap-eoapi/${stage}/${type}/stac-collection-transaction-auth-secret-arn`,
         stringValue: transactionAuthSecret.secretArn,
-        description: `Secrets Manager ARN for MAAP ${type} STAC collection transaction auth (${stage})`,
+        description: `Secrets Manager ARN for MAAP ${type} STAC transaction auth (${stage})`,
       });
     }
 
@@ -692,11 +717,24 @@ export interface Props extends StackProps {
 
     /**
      * Optional collection transaction support for the STAC API.
-     * When omitted, the API stays read-only.
+     * When omitted, collection write routes stay disabled.
      */
     transactions?: {
       authMode: "basic" | "jwt";
       authSecretArn?: string;
+    };
+
+    /**
+     * Optional multi-tenant catalog support for the STAC API.
+     * When omitted, read-only catalog routes are enabled.
+     */
+    catalogs?: {
+      enabled: boolean;
+      hideAlternateParents?: boolean;
+      transactions?: {
+        authMode: "basic" | "jwt";
+        authSecretArn?: string;
+      };
     };
   };
 

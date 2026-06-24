@@ -11,7 +11,12 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from eoapi.stac import auth
-from eoapi.stac.main import COLLECTION_TRANSACTION_EXTENSION, create_app
+from eoapi.stac.main import (
+    CATALOGS_EXTENSION,
+    CATALOG_TRANSACTION_EXTENSION,
+    COLLECTION_TRANSACTION_EXTENSION,
+    create_app,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -126,6 +131,99 @@ def test_collection_write_routes_receive_transaction_auth_dependency(
     for route in protected_routes.values():
         assert len(route.dependencies) == 1
         assert route.dependencies[0].dependency == auth.require_transaction_auth
+
+
+@pytest.fixture
+def catalog_transaction_app(
+    monkeypatch: pytest.MonkeyPatch,
+    basic_auth_env_credentials: None,
+) -> Iterator[TestClient]:
+    """Build a catalog transaction-enabled app using env-provided credentials."""
+    app = create_app(
+        enabled_extensions={CATALOGS_EXTENSION, CATALOG_TRANSACTION_EXTENSION},
+        connect_to_database=False,
+    )
+    with TestClient(app) as client:
+        yield client
+
+
+def test_catalog_transaction_routes_require_auth(
+    catalog_transaction_app: TestClient,
+) -> None:
+    """Catalog transaction routes should challenge unauthenticated requests."""
+    response = catalog_transaction_app.post("/catalogs", json={})
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Basic"
+
+
+def test_catalog_transaction_routes_reject_invalid_auth(
+    catalog_transaction_app: TestClient,
+) -> None:
+    """Catalog transaction routes should reject invalid credentials."""
+    response = catalog_transaction_app.post(
+        "/catalogs",
+        json={},
+        auth=("alice", "wonderland"),
+    )
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Basic"
+
+
+def test_catalog_read_routes_do_not_require_transaction_auth(
+    catalog_transaction_app: TestClient,
+) -> None:
+    """Catalog read routes should not inherit transaction auth dependencies."""
+    catalogs_get_route = next(
+        route
+        for route in catalog_transaction_app.app.routes
+        if getattr(route, "path", None) == "/catalogs"
+        and "GET" in getattr(route, "methods", set())
+    )
+
+    assert catalogs_get_route.dependencies == []
+
+
+def test_catalog_write_routes_receive_transaction_auth_dependency(
+    catalog_transaction_app: TestClient,
+) -> None:
+    """Catalog write routes should receive the auth dependency."""
+    write_methods_by_path = {
+        "/catalogs": {"POST"},
+        "/catalogs/{catalog_id}": {"PUT", "DELETE"},
+        "/catalogs/{catalog_id}/collections": {"POST"},
+        "/catalogs/{catalog_id}/collections/{collection_id}": {"PUT", "DELETE"},
+        "/catalogs/{catalog_id}/catalogs": {"POST"},
+        "/catalogs/{catalog_id}/catalogs/{sub_catalog_id}": {"DELETE"},
+    }
+    protected_routes = [
+        route
+        for route in catalog_transaction_app.app.routes
+        if getattr(route, "path", None) in write_methods_by_path
+        and getattr(route, "methods", set())
+        & write_methods_by_path[getattr(route, "path")]
+    ]
+
+    assert len(protected_routes) == 8
+    for route in protected_routes:
+        assert len(route.dependencies) == 1
+        assert route.dependencies[0].dependency == auth.require_transaction_auth
+
+
+def test_catalog_write_openapi_security_matches_collection_writes(
+    catalog_transaction_app: TestClient,
+) -> None:
+    """Catalog write operations should advertise HTTP Basic auth in OpenAPI."""
+    openapi = catalog_transaction_app.app.openapi()
+
+    assert openapi["paths"]["/catalogs"]["post"]["security"] == [
+        {"HTTPBasic": []}
+    ]
+    assert openapi["paths"]["/catalogs/{catalog_id}"]["put"]["security"] == [
+        {"HTTPBasic": []}
+    ]
+    assert "security" not in openapi["paths"]["/catalogs"]["get"]
 
 
 def test_transaction_enabled_app_accepts_secret_manager_credentials(
