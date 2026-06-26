@@ -83,7 +83,9 @@ describe("PgStacInfra STAC runtime wiring", () => {
           STAC_FASTAPI_TITLE: "MAAP public STAC API (test)",
           STAC_FASTAPI_LANDING_ID: "maap-public-stac-api-test",
           ENABLED_EXTENSIONS:
-            "query,sort,fields,filter,free_text,pagination,collection_search",
+            "query,sort,fields,filter,free_text,pagination,collection_search,catalogs",
+          ENABLE_CATALOGS_EXTENSION: "true",
+          HIDE_ALTERNATE_PARENTS: "false",
         }),
       },
     });
@@ -126,7 +128,7 @@ describe("PgStacInfra STAC runtime wiring", () => {
       Environment: {
         Variables: Match.objectLike({
           ENABLED_EXTENSIONS:
-            "query,sort,fields,filter,free_text,pagination,collection_search,collection_transaction",
+            "query,sort,fields,filter,free_text,pagination,collection_search,catalogs,collection_transaction",
           MAAP_TRANSACTION_AUTH_MODE: "basic",
           MAAP_TRANSACTION_AUTH_SECRET_ARN: {
             Ref: Match.stringLikeRegexp(
@@ -141,6 +143,84 @@ describe("PgStacInfra STAC runtime wiring", () => {
       Name:
         "/maap-eoapi/test/internal/stac-collection-transaction-auth-secret-arn",
     });
+  });
+
+  test("enables catalog transactions with a stack-managed secret", () => {
+    const template = buildTemplate({
+      stacApiConfig: {
+        customDomainName: "internal-stac.example.com",
+        catalogs: {
+          enabled: true,
+          hideAlternateParents: true,
+          transactions: {
+            authMode: "basic",
+          },
+        },
+      },
+    });
+
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      Handler: "eoapi.stac.handler.handler",
+      Environment: {
+        Variables: Match.objectLike({
+          ENABLED_EXTENSIONS:
+            "query,sort,fields,filter,free_text,pagination,collection_search,catalogs,catalog_transaction",
+          ENABLE_CATALOGS_EXTENSION: "true",
+          HIDE_ALTERNATE_PARENTS: "true",
+          MAAP_TRANSACTION_AUTH_MODE: "basic",
+          MAAP_TRANSACTION_AUTH_SECRET_ARN: {
+            Ref: Match.stringLikeRegexp(
+              "staccollectiontransactionauthsecret",
+            ),
+          },
+        }),
+      },
+    });
+  });
+
+  test("supports catalog transactions without collection transactions", () => {
+    const template = buildTemplate({
+      stacApiConfig: {
+        customDomainName: "internal-stac.example.com",
+        catalogs: {
+          enabled: true,
+          transactions: {
+            authMode: "basic",
+          },
+        },
+      },
+    });
+
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      Handler: "eoapi.stac.handler.handler",
+      Environment: {
+        Variables: Match.objectLike({
+          ENABLED_EXTENSIONS:
+            "query,sort,fields,filter,free_text,pagination,collection_search,catalogs,catalog_transaction",
+          MAAP_TRANSACTION_AUTH_MODE: "basic",
+        }),
+      },
+    });
+    template.hasResourceProperties("AWS::SSM::Parameter", {
+      Name:
+        "/maap-eoapi/test/internal/stac-collection-transaction-auth-secret-arn",
+    });
+  });
+
+  test("rejects catalog transactions when catalogs are disabled", () => {
+    expect(() =>
+      buildTemplate({
+        stacApiConfig: {
+          customDomainName: "internal-stac.example.com",
+          catalogs: {
+            enabled: false,
+            transactions: {
+              authMode: "basic",
+            },
+          },
+        },
+      }),
+    ).toThrow(/catalog transactions require catalogs/);
   });
 
   test("uses an explicit transaction auth secret ARN override when provided", () => {

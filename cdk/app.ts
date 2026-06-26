@@ -30,6 +30,7 @@ const {
   userStacCollectionIdRegistry,
   userStacInboundTopicArns,
   userStacItemGenRoleArn,
+  userStacCatalogs,
   userStacCollectionTransactions,
   userStacStacApiCustomDomainName,
   userStacTitilerPgStacApiCustomDomainName,
@@ -70,6 +71,7 @@ const coreInfrastructure = new PgStacInfra(app, buildStackName("pgSTAC"), {
   stacApiConfig: {
     customDomainName: stacApiCustomDomainName,
     integrationApiArn: stacApiIntegrationApiArn,
+    catalogs: { enabled: true },
   },
   titilerPgstacConfig: {
     mosaicHost,
@@ -109,6 +111,7 @@ const userInfrastructure = new PgStacInfra(app, buildStackName("userSTAC"), {
   },
   stacApiConfig: {
     customDomainName: userStacStacApiCustomDomainName,
+    catalogs: userStacCatalogs,
     transactions: userStacCollectionTransactions,
   },
   titilerPgstacConfig: {

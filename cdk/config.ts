@@ -5,6 +5,12 @@ export interface CollectionTransactionsConfig {
   authSecretArn?: string;
 }
 
+export interface StacCatalogsConfig {
+  enabled: boolean;
+  hideAlternateParents?: boolean;
+  transactions?: CollectionTransactionsConfig;
+}
+
 function parseOptionalBooleanEnv(name: string): boolean | undefined {
   const value = process.env[name];
   if (value === undefined || value === "") {
@@ -51,6 +57,7 @@ export class Config {
   readonly userStacCollectionTransactions:
     | CollectionTransactionsConfig
     | undefined;
+  readonly userStacCatalogs: StacCatalogsConfig;
 
   constructor() {
     const requiredVariables = [
@@ -148,6 +155,7 @@ export class Config {
       process.env.USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME;
     this.userStacCollectionTransactions =
       this.parseUserStacCollectionTransactions();
+    this.userStacCatalogs = this.parseUserStacCatalogs();
 
     if (process.env.USER_STAC_INBOUND_TOPIC_ARNS) {
       try {
@@ -223,5 +231,56 @@ export class Config {
       : {
           authMode,
         };
+  }
+
+  private parseUserStacCatalogs(): StacCatalogsConfig {
+    const enabled = parseOptionalBooleanEnv("USER_STAC_CATALOGS_ENABLED") ?? true;
+    const hideAlternateParents = parseOptionalBooleanEnv(
+      "USER_STAC_CATALOGS_HIDE_ALTERNATE_PARENTS",
+    );
+    const transactionsEnabled = parseOptionalBooleanEnv(
+      "USER_STAC_CATALOG_TRANSACTIONS_ENABLED",
+    );
+
+    if (transactionsEnabled === true && !enabled) {
+      throw new Error(
+        "USER_STAC_CATALOG_TRANSACTIONS_ENABLED=true requires USER_STAC_CATALOGS_ENABLED=true",
+      );
+    }
+
+    if (transactionsEnabled !== true) {
+      return {
+        enabled,
+        ...(hideAlternateParents !== undefined && { hideAlternateParents }),
+      };
+    }
+
+    const authMode = process.env.USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE;
+    if (!authMode) {
+      throw new Error(
+        "Must provide USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE when USER_STAC_CATALOG_TRANSACTIONS_ENABLED=true",
+      );
+    }
+
+    if (authMode !== "basic") {
+      throw new Error(
+        `Unsupported USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE: ${authMode}. Expected \"basic\".`,
+      );
+    }
+
+    const authSecretArn = process.env.USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN;
+
+    return {
+      enabled,
+      ...(hideAlternateParents !== undefined && { hideAlternateParents }),
+      transactions: authSecretArn
+        ? {
+            authMode,
+            authSecretArn,
+          }
+        : {
+            authMode,
+          },
+    };
   }
 }

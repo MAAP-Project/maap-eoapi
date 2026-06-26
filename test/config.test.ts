@@ -70,6 +70,7 @@ describe("Config", () => {
       "arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl",
     );
     expect(config.userStacCollectionTransactions).toBeUndefined();
+    expect(config.userStacCatalogs).toEqual({ enabled: true });
 
     // Test number properties
     expect(config.dbAllocatedStorage).toBe(20);
@@ -147,6 +148,34 @@ describe("Config", () => {
     expect(() => new Config()).toThrow(
       /USER_STAC_COLLECTION_TRANSACTIONS_ENABLED/,
     );
+  });
+
+  test("configures user STAC catalogs and catalog transactions", () => {
+    process.env.USER_STAC_CATALOGS_HIDE_ALTERNATE_PARENTS = "true";
+    process.env.USER_STAC_CATALOG_TRANSACTIONS_ENABLED = "true";
+    process.env.USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE = "basic";
+    process.env.USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN =
+      "arn:aws:secretsmanager:us-west-2:123456789012:secret:user-stac-catalog-auth";
+
+    const config = new Config();
+
+    expect(config.userStacCatalogs).toEqual({
+      enabled: true,
+      hideAlternateParents: true,
+      transactions: {
+        authMode: "basic",
+        authSecretArn:
+          "arn:aws:secretsmanager:us-west-2:123456789012:secret:user-stac-catalog-auth",
+      },
+    });
+  });
+
+  test("rejects catalog transactions when user STAC catalogs are disabled", () => {
+    process.env.USER_STAC_CATALOGS_ENABLED = "false";
+    process.env.USER_STAC_CATALOG_TRANSACTIONS_ENABLED = "true";
+    process.env.USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE = "basic";
+
+    expect(() => new Config()).toThrow(/requires USER_STAC_CATALOGS_ENABLED/);
   });
 
   test("buildStackName formats properly", () => {

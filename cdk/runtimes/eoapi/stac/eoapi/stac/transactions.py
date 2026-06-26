@@ -1,13 +1,15 @@
 """Collection-only transaction extension for the MAAP STAC runtime."""
 
-from typing import Any
+from collections.abc import Sequence
+
+from fastapi.params import Depends
 
 import attr
 from fastapi import APIRouter, FastAPI
 from starlette.responses import Response
 
 from stac_fastapi.api.models import JSONResponse
-from stac_fastapi.extensions.core.transaction import (
+from stac_fastapi.extensions.transaction import (
     AsyncBaseTransactionsClient,
     TransactionConformanceClasses,
     TransactionExtension,
@@ -27,12 +29,11 @@ class CollectionTransactionExtension(TransactionExtension):
     schema_href: str | None = attr.ib(default=None)
     router: APIRouter = attr.ib(factory=APIRouter)
     response_class: type[Response] = attr.ib(default=JSONResponse)
-    route_dependencies: list[Any] = attr.ib(factory=list)
+    route_dependencies: Sequence[Depends] | None = attr.ib(default=None)
 
     def register(self, app: FastAPI) -> None:
         """Register collection transaction routes with the target app."""
         self.router.prefix = app.state.router_prefix
-        self.router.dependencies = list(self.route_dependencies)
         self.register_create_collection()
         self.register_update_collection()
         self.register_patch_collection()

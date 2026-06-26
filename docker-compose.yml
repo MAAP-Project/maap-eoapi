@@ -23,7 +23,9 @@ services:
       POSTGRES_PORT: "5432"
       DB_MIN_CONN_SIZE: "1"
       DB_MAX_CONN_SIZE: "1"
-      ENABLED_EXTENSIONS: query,sort,fields,filter,free_text,pagination,collection_search,collection_transaction
+      ENABLED_EXTENSIONS: ${STAC_ENABLED_EXTENSIONS:-query,sort,fields,filter,free_text,pagination,collection_search,catalogs,collection_transaction,catalog_transaction}
+      ENABLE_CATALOGS_EXTENSION: ${ENABLE_CATALOGS_EXTENSION:-true}
+      HIDE_ALTERNATE_PARENTS: ${HIDE_ALTERNATE_PARENTS:-false}
       TITILER_ENDPOINT: http://raster:8082
       STAC_FASTAPI_TITLE: MAAP Local STAC API
       STAC_FASTAPI_LANDING_ID: maap-stac-api-local
@@ -110,6 +112,16 @@ services:
     command: postgres -N 500
     volumes:
       - ./.pgdata:/var/lib/postgresql/data
+
+  stac-browser:
+    image: ghcr.io/radiantearth/stac-browser:latest
+    ports:
+      - "${MY_DOCKER_IP:-127.0.0.1}:8080:8080"
+    environment:
+      SB_catalogUrl: "http://${MY_DOCKER_IP:-127.0.0.1}:8081"
+      # SB_apiCatalogPriority: "childs"
+    depends_on:
+      - stac
 
 networks:
   default:
