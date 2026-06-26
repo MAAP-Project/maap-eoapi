@@ -14,10 +14,12 @@ docker compose up --build stac raster database
 
 The local compose setup bind-mounts `cdk/runtimes/eoapi/stac/` into the container and runs `uvicorn --reload`, so changes under `cdk/runtimes/eoapi/stac/eoapi/stac/` are picked up without rebuilding the image. Add or override environment variables with `.stac.env`, `.raster.env`, or `.env` as needed.
 
-Read-only multi-tenant catalog routes are enabled through `ENABLED_EXTENSIONS=catalogs` and the upstream-compatible `ENABLE_CATALOGS_EXTENSION=true` setting. The local compose default includes read-only catalogs. To try catalog transactions locally, set `STAC_ENABLED_EXTENSIONS` to include `catalog_transaction` as well, for example:
+Multi-tenant catalog routes are enabled through `ENABLED_EXTENSIONS=catalogs` and the upstream-compatible `ENABLE_CATALOGS_EXTENSION=true` setting. The local compose default includes both read-only catalog routes and catalog transaction routes by setting `STAC_ENABLED_EXTENSIONS` to include `catalogs`, `collection_transaction`, and `catalog_transaction`.
+
+To run the local API with read-only catalog routes only, override `STAC_ENABLED_EXTENSIONS` without `catalog_transaction`, for example:
 
 ```bash
-STAC_ENABLED_EXTENSIONS=query,sort,fields,filter,free_text,pagination,collection_search,catalogs,collection_transaction,catalog_transaction docker compose up --build stac database
+STAC_ENABLED_EXTENSIONS=query,sort,fields,filter,free_text,pagination,collection_search,catalogs docker compose up --build stac database
 ```
 
 Catalog transaction routes are separate from collection transaction routes. Enabling `catalogs` alone adds read routes such as `GET /catalogs`, `GET /catalogs/{catalog_id}`, and catalog-scoped collection/item reads. It does not add write routes.
