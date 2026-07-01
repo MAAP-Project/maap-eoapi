@@ -33,6 +33,7 @@ from .config import (
     StacBrowserConfig,
     IngestorConfig,
     DpsStacItemGenConfig,
+    StacCatalogsConfig,
 )
 
 from constructs import Construct
@@ -126,19 +127,43 @@ class PgStacInfra(Stack):
 
         # ── Collection transactions config ─────────────────────────────────
         transactions_config = stac_api_config.transactions
+        catalogs_config = stac_api_config.catalogs or StacCatalogsConfig(enabled=True)
+        catalogs_enabled = catalogs_config.enabled is not False
+        catalog_transactions_config = catalogs_config.transactions
+
+        if catalog_transactions_config and not catalogs_enabled:
+            raise ValueError("STAC catalog transactions require catalogs to be enabled")
+
         if transactions_config and transactions_config.auth_mode != "basic":
             raise ValueError(
                 f"Unsupported STAC collection transaction auth mode: "
                 f"{transactions_config.auth_mode}"
             )
+        if catalog_transactions_config and catalog_transactions_config.auth_mode != "basic":
+            raise ValueError(
+                f"Unsupported STAC catalog transaction auth mode: "
+                f"{catalog_transactions_config.auth_mode}"
+            )
+        if (
+            transactions_config
+            and catalog_transactions_config
+            and transactions_config.auth_secret_arn
+            != catalog_transactions_config.auth_secret_arn
+        ):
+            raise ValueError(
+                "STAC collection and catalog transactions must use the same auth "
+                "secret ARN"
+            )
 
-        if transactions_config:
-            if transactions_config.auth_secret_arn:
+        write_transactions_config = transactions_config or catalog_transactions_config
+
+        if write_transactions_config:
+            if write_transactions_config.auth_secret_arn:
                 transaction_auth_secret: Optional[secretsmanager.ISecret] = (
                     secretsmanager.Secret.from_secret_complete_arn(
                         self,
                         "stac-collection-transaction-auth-secret",
-                        transactions_config.auth_secret_arn,
+                        write_transactions_config.auth_secret_arn,
                     )
                 )
             else:
@@ -172,9 +197,10 @@ class PgStacInfra(Stack):
             "free_text",
             "pagination",
             "collection_search",
+            *(["catalogs"] if catalogs_enabled else []),
+            *(["collection_transaction"] if transactions_config else []),
+            *(["catalog_transaction"] if catalog_transactions_config else []),
         ]
-        if transactions_config:
-            stac_enabled_extensions.append("collection_transaction")
 
         stac_api_env: dict[str, str] = {
             "STAC_FASTAPI_TITLE": f"MAAP {type} STAC API ({stage})",
@@ -184,12 +210,16 @@ class PgStacInfra(Stack):
             ),
             "STAC_FASTAPI_VERSION": version,
             "ENABLED_EXTENSIONS": ",".join(stac_enabled_extensions),
+            "ENABLE_CATALOGS_EXTENSION": "true" if catalogs_enabled else "false",
+            "HIDE_ALTERNATE_PARENTS": (
+                "true" if catalogs_config.hide_alternate_parents else "false"
+            ),
             **(
                 {
-                    "MAAP_TRANSACTION_AUTH_MODE": transactions_config.auth_mode,
+                    "MAAP_TRANSACTION_AUTH_MODE": write_transactions_config.auth_mode,
                     "MAAP_TRANSACTION_AUTH_SECRET_ARN": transaction_auth_secret.secret_arn,  # type: ignore[union-attr]
                 }
-                if transactions_config
+                if write_transactions_config
                 else {}
             ),
         }
@@ -258,8 +288,8 @@ class PgStacInfra(Stack):
                 ),
                 string_value=transaction_auth_secret.secret_arn,
                 description=(
-                    f"Secrets Manager ARN for MAAP {type} STAC collection "
-                    f"transaction auth ({stage})"
+                    f"Secrets Manager ARN for MAAP {type} STAC transaction auth "
+                    f"({stage})"
                 ),
             )
 

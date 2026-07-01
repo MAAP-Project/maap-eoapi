@@ -1,19 +1,21 @@
-"""Tests for PgStacInfra stack - Python equivalent of test/pgstac-infra.test.ts"""
+"""Tests for PgStacInfra stack wiring and transaction/catalog behavior."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 import aws_cdk as cdk
+import pytest
 from aws_cdk import assertions, aws_ec2 as ec2
 
-from cdk.pgstac_infra import (
+from cdk.config import (
     CollectionTransactionsConfig,
     PgStacDbConfig,
-    PgStacInfra,
     StacApiConfig,
+    StacCatalogsConfig,
     TitilerPgstacConfig,
 )
+from cdk.pgstac_infra import PgStacInfra
 
 # Minimal required props for test builds
 BASE_TITILER_CONFIG = TitilerPgstacConfig(
@@ -64,7 +66,7 @@ def build_template(overrides: dict | None = None) -> assertions.Template:
     props |= overrides or {}
 
     # Mock lambda Code.from_docker_build so tests don't need Docker
-    mock_code = cdk.aws_lambda.Code.from_asset("test")
+    mock_code = cdk.aws_lambda.Code.from_asset("tests")
     with patch("aws_cdk.aws_lambda.Code.from_docker_build", return_value=mock_code):
         stack = PgStacInfra(app, "TestPgStacInfra", **props)
 
@@ -96,8 +98,10 @@ class TestPgStacInfraStacRuntimeWiring:
                             "STAC_FASTAPI_LANDING_ID": "maap-public-stac-api-test",
                             "ENABLED_EXTENSIONS": (
                                 "query,sort,fields,filter,free_text,"
-                                "pagination,collection_search"
+                                "pagination,collection_search,catalogs"
                             ),
+                            "ENABLE_CATALOGS_EXTENSION": "true",
+                            "HIDE_ALTERNATE_PARENTS": "false",
                         }
                     )
                 },
@@ -138,7 +142,9 @@ class TestPgStacInfraStacRuntimeWiring:
                 "GenerateSecretString": assertions.Match.object_like(
                     {
                         "GenerateStringKey": "password",
-                        "SecretStringTemplate": '{"username":"maap-internal-stac-writer"}',
+                        "SecretStringTemplate": assertions.Match.string_like_regexp(
+                            r'\{"username"\s*:\s*"maap-internal-stac-writer"\}'
+                        ),
                     }
                 ),
             },
@@ -153,7 +159,7 @@ class TestPgStacInfraStacRuntimeWiring:
                         {
                             "ENABLED_EXTENSIONS": (
                                 "query,sort,fields,filter,free_text,pagination,"
-                                "collection_search,collection_transaction"
+                                "collection_search,catalogs,collection_transaction"
                             ),
                             "MAAP_TRANSACTION_AUTH_MODE": "basic",
                         }
@@ -170,6 +176,93 @@ class TestPgStacInfraStacRuntimeWiring:
                 )
             },
         )
+
+    def test_enables_catalog_transactions_with_stack_managed_secret(self):
+        template = build_template(
+            {
+                "stac_api_config": StacApiConfig(
+                    custom_domain_name="internal-stac.example.com",
+                    catalogs=StacCatalogsConfig(
+                        enabled=True,
+                        hide_alternate_parents=True,
+                        transactions=CollectionTransactionsConfig(auth_mode="basic"),
+                    ),
+                ),
+            }
+        )
+
+        template.has_resource_properties(
+            "AWS::Lambda::Function",
+            {
+                "Handler": "eoapi.stac.handler.handler",
+                "Environment": {
+                    "Variables": assertions.Match.object_like(
+                        {
+                            "ENABLED_EXTENSIONS": (
+                                "query,sort,fields,filter,free_text,pagination,"
+                                "collection_search,catalogs,catalog_transaction"
+                            ),
+                            "ENABLE_CATALOGS_EXTENSION": "true",
+                            "HIDE_ALTERNATE_PARENTS": "true",
+                            "MAAP_TRANSACTION_AUTH_MODE": "basic",
+                        }
+                    )
+                },
+            },
+        )
+
+    def test_supports_catalog_transactions_without_collection_transactions(self):
+        template = build_template(
+            {
+                "stac_api_config": StacApiConfig(
+                    custom_domain_name="internal-stac.example.com",
+                    catalogs=StacCatalogsConfig(
+                        enabled=True,
+                        transactions=CollectionTransactionsConfig(auth_mode="basic"),
+                    ),
+                ),
+            }
+        )
+
+        template.has_resource_properties(
+            "AWS::Lambda::Function",
+            {
+                "Handler": "eoapi.stac.handler.handler",
+                "Environment": {
+                    "Variables": assertions.Match.object_like(
+                        {
+                            "ENABLED_EXTENSIONS": (
+                                "query,sort,fields,filter,free_text,pagination,"
+                                "collection_search,catalogs,catalog_transaction"
+                            ),
+                            "MAAP_TRANSACTION_AUTH_MODE": "basic",
+                        }
+                    )
+                },
+            },
+        )
+        template.has_resource_properties(
+            "AWS::SSM::Parameter",
+            {
+                "Name": (
+                    "/maap-eoapi/test/internal/stac-collection-transaction-auth-secret-arn"
+                )
+            },
+        )
+
+    def test_rejects_catalog_transactions_when_catalogs_disabled(self):
+        with pytest.raises(ValueError, match="catalog transactions require catalogs"):
+            build_template(
+                {
+                    "stac_api_config": StacApiConfig(
+                        custom_domain_name="internal-stac.example.com",
+                        catalogs=StacCatalogsConfig(
+                            enabled=False,
+                            transactions=CollectionTransactionsConfig(auth_mode="basic"),
+                        ),
+                    ),
+                }
+            )
 
     def test_uses_explicit_transaction_auth_secret_arn_override(self):
         template = build_template(

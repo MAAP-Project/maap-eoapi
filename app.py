@@ -4,20 +4,13 @@ import aws_cdk as cdk
 from cdk.config import Config
 from cdk.maap_eoapi_common import MaapEoapiCommon
 from cdk.patch_manager import PatchManagerStack
-from cdk.pgstac_infra import (
-    DpsStacItemGenConfig,
-    IngestorConfig,
-    PgStacDbConfig,
-    PgStacInfra,
-    StacApiConfig,
-    StacBrowserConfig,
-    TitilerPgstacConfig,
-)
+from cdk.pgstac_infra import PgStacInfra
 from cdk.vpc import VpcStack
 
 config = Config()
 
 app = cdk.App()
+dps_stac_item_gen_config = config.dps_stac_item_gen()
 
 vpc_stack = VpcStack(
     app,
@@ -47,33 +40,11 @@ core_infrastructure = PgStacInfra(
     certificate_arn=config.certificate_arn,
     web_acl_arn=config.web_acl_arn,
     logging_bucket_arn=common.logging_bucket.bucket_arn,
-    pgstac_db_config=PgStacDbConfig(
-        instance_type=config.db_instance_type,
-        pgstac_version=config.pgstac_version,
-        allocated_storage=config.db_allocated_storage,
-        subnet_public=False,
-    ),
-    stac_api_config=StacApiConfig(
-        custom_domain_name=config.stac_api_custom_domain_name,
-        integration_api_arn=config.stac_api_integration_api_arn,
-    ),
-    titiler_pgstac_config=TitilerPgstacConfig(
-        mosaic_host=config.mosaic_host,
-        buckets_path="./titiler_buckets.yaml",
-        custom_domain_name=config.titiler_pg_stac_api_custom_domain_name,
-        data_access_role_arn=config.titiler_data_access_role_arn,
-    ),
-    stac_browser_config=StacBrowserConfig(
-        repo_tag=config.stac_browser_repo_tag,
-        custom_domain_name=config.stac_browser_custom_domain_name,
-        certificate_arn=config.stac_browser_certificate_arn,
-    ),
-    ingestor_config=IngestorConfig(
-        jwks_url=config.jwks_url,
-        data_access_role_arn=config.ingestor_data_access_role_arn,
-        domain_name=config.ingestor_domain_name,
-        user_data_path="./userdata.yaml",
-    ),
+    pgstac_db_config=config.pgstac_db(),
+    stac_api_config=config.stac_api(),
+    titiler_pgstac_config=config.titiler_pgstac(),
+    stac_browser_config=config.stac_browser(),
+    ingestor_config=config.ingestor(),
     add_stactools_item_generator=True,
     termination_protection=False,
 )
@@ -89,36 +60,11 @@ user_infrastructure = PgStacInfra(
     certificate_arn=config.certificate_arn,
     web_acl_arn=config.web_acl_arn,
     logging_bucket_arn=common.logging_bucket.bucket_arn,
-    pgstac_db_config=PgStacDbConfig(
-        instance_type=config.db_instance_type,
-        pgstac_version=config.pgstac_version,
-        allocated_storage=config.db_allocated_storage,
-        subnet_public=False,
-    ),
-    stac_api_config=StacApiConfig(
-        custom_domain_name=config.user_stac_stac_api_custom_domain_name,
-        transactions=(
-            config.user_stac_collection_transactions  # type: ignore[arg-type]
-        ),
-    ),
-    titiler_pgstac_config=TitilerPgstacConfig(
-        mosaic_host=config.mosaic_host,
-        buckets_path="./titiler_buckets.yaml",
-        custom_domain_name=config.user_stac_titiler_pgstac_api_custom_domain_name,
-        data_access_role_arn=config.titiler_data_access_role_arn,
-    ),
+    pgstac_db_config=config.pgstac_db(),
+    stac_api_config=config.stac_api(user_stac=True),
+    titiler_pgstac_config=config.titiler_pgstac(user_stac=True),
     add_stactools_item_generator=False,
-    **(
-        {
-            "dps_stac_item_gen_config": DpsStacItemGenConfig(
-                item_gen_role_arn=config.user_stac_item_gen_role_arn,
-                inbound_topic_arns=config.user_stac_inbound_topic_arns,
-                user_stac_collection_id_registry=config.user_stac_collection_id_registry,
-            )
-        }
-        if config.user_stac_item_gen_role_arn
-        else {}
-    ),
+    **({"dps_stac_item_gen_config": dps_stac_item_gen_config} if dps_stac_item_gen_config else {}),
     termination_protection=False,
 )
 

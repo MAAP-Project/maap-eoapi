@@ -7,11 +7,8 @@ from fastapi.testclient import TestClient
 
 from eoapi.stac import auth
 from eoapi.stac.main import (
-<<<<<<< HEAD
     CATALOG_TRANSACTION_EXTENSION,
     CATALOGS_EXTENSION,
-=======
->>>>>>> 8b10b607 (style: ruff format)
     COLLECTION_TRANSACTION_EXTENSION,
     create_app,
     parse_enabled_extensions,
