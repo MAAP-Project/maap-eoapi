@@ -7,7 +7,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "obstore>=0.7.0",
+    "obstore>=0.9.5",
     "pydantic>=2.11.0",
     "pystac[validation]>=1.13.0",
     "stac-pydantic>=3.2.0",
