@@ -72,7 +72,7 @@ jobs:
         run: npm ci
 
       - name: Assume Github OIDC role
-        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         if: github.event_name == 'workflow_dispatch'
         with:
           aws-region: us-west-2
