@@ -222,9 +222,7 @@ def test_catalog_write_openapi_security_matches_collection_writes(
     """Catalog write operations should advertise HTTP Basic auth in OpenAPI."""
     openapi = catalog_transaction_app.app.openapi()
 
-    assert openapi["paths"]["/catalogs"]["post"]["security"] == [
-        {"HTTPBasic": []}
-    ]
+    assert openapi["paths"]["/catalogs"]["post"]["security"] == [{"HTTPBasic": []}]
     assert openapi["paths"]["/catalogs/{catalog_id}"]["put"]["security"] == [
         {"HTTPBasic": []}
     ]

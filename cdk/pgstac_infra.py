@@ -139,7 +139,10 @@ class PgStacInfra(Stack):
                 f"Unsupported STAC collection transaction auth mode: "
                 f"{transactions_config.auth_mode}"
             )
-        if catalog_transactions_config and catalog_transactions_config.auth_mode != "basic":
+        if (
+            catalog_transactions_config
+            and catalog_transactions_config.auth_mode != "basic"
+        ):
             raise ValueError(
                 f"Unsupported STAC catalog transaction auth mode: "
                 f"{catalog_transactions_config.auth_mode}"

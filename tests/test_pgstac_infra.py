@@ -258,7 +258,9 @@ class TestPgStacInfraStacRuntimeWiring:
                         custom_domain_name="internal-stac.example.com",
                         catalogs=StacCatalogsConfig(
                             enabled=False,
-                            transactions=CollectionTransactionsConfig(auth_mode="basic"),
+                            transactions=CollectionTransactionsConfig(
+                                auth_mode="basic"
+                            ),
                         ),
                     ),
                 }

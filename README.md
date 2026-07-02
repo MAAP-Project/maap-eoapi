@@ -20,13 +20,11 @@ User STAC catalog configuration:
 
 - `USER_STAC_CATALOGS_ENABLED=false` disables read-only `/catalogs` routes.
 - `USER_STAC_CATALOGS_HIDE_ALTERNATE_PARENTS=true` hides alternate parent links in catalog responses.
-- `USER_STAC_CATALOG_TRANSACTIONS_ENABLED=true` enables catalog write routes. This requires catalogs to stay enabled.
-- `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` selects the supported auth mode.
+- `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` enables catalog write routes and selects the supported auth mode. Catalog write routes require catalogs to stay enabled.
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN` can point at an existing auth secret.
 
 Collection-only STAC transactions can still be enabled with:
 
-- `USER_STAC_COLLECTION_TRANSACTIONS_ENABLED=true`
 - `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE=basic`
 
 When either collection or catalog transactions are enabled, this CDK stack creates and manages the Secrets Manager secret used for STAC basic auth by default, grants the STAC Lambda read access to it, and publishes the secret ARN to SSM at:
@@ -69,7 +67,7 @@ For a catalogs-enabled deployment, verify:
 
 - OpenAPI includes read-only catalog routes such as `GET /catalogs`, `GET /catalogs/{catalog_id}`, and catalog-scoped collection/item reads.
 - `GET /` includes `rel="child"` links for listed catalogs so STAC Browser can discover catalog roots.
-- catalog write routes are absent unless `USER_STAC_CATALOG_TRANSACTIONS_ENABLED=true`.
+- catalog write routes are absent unless `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` is configured.
 
 For a transaction-enabled internal deployment, verify:
 

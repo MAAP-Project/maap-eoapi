@@ -41,8 +41,8 @@ core_infrastructure = PgStacInfra(
     web_acl_arn=config.web_acl_arn,
     logging_bucket_arn=common.logging_bucket.bucket_arn,
     pgstac_db_config=config.pgstac_db(),
-    stac_api_config=config.stac_api(),
-    titiler_pgstac_config=config.titiler_pgstac(),
+    stac_api_config=config.public_stac_api(),
+    titiler_pgstac_config=config.public_titiler_pgstac(),
     stac_browser_config=config.stac_browser(),
     ingestor_config=config.ingestor(),
     add_stactools_item_generator=True,
@@ -61,10 +61,14 @@ user_infrastructure = PgStacInfra(
     web_acl_arn=config.web_acl_arn,
     logging_bucket_arn=common.logging_bucket.bucket_arn,
     pgstac_db_config=config.pgstac_db(),
-    stac_api_config=config.stac_api(user_stac=True),
-    titiler_pgstac_config=config.titiler_pgstac(user_stac=True),
+    stac_api_config=config.user_stac_api(),
+    titiler_pgstac_config=config.user_titiler_pgstac(),
     add_stactools_item_generator=False,
-    **({"dps_stac_item_gen_config": dps_stac_item_gen_config} if dps_stac_item_gen_config else {}),
+    **(
+        {"dps_stac_item_gen_config": dps_stac_item_gen_config}
+        if dps_stac_item_gen_config
+        else {}
+    ),
     termination_protection=False,
 )
 

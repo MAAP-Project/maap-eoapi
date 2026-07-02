@@ -40,9 +40,18 @@ def test_creates_valid_config_with_required_env(required_env: None) -> None:
 
     assert config.stage == "test"
     assert config.jwks_url == "https://example.com/jwks"
-    assert config.titiler_data_access_role_arn == "arn:aws:iam::123456789012:role/test-role"
-    assert config.ingestor_data_access_role_arn == "arn:aws:iam::123456789012:role/test-role"
-    assert config.stac_api_integration_api_arn == "arn:aws:iam::123456789012:role/test-role"
+    assert (
+        config.titiler_data_access_role_arn
+        == "arn:aws:iam::123456789012:role/test-role"
+    )
+    assert (
+        config.ingestor_data_access_role_arn
+        == "arn:aws:iam::123456789012:role/test-role"
+    )
+    assert (
+        config.stac_api_integration_api_arn
+        == "arn:aws:iam::123456789012:role/test-role"
+    )
     assert config.mosaic_host == "example.com"
     assert config.stac_browser_repo_tag == "latest"
     assert config.stac_browser_custom_domain_name == "stac-browser.example.com"
@@ -51,7 +60,10 @@ def test_creates_valid_config_with_required_env(required_env: None) -> None:
     )
     assert config.stac_api_custom_domain_name == "stac-api.example.com"
     assert config.pgstac_version == "0.9.5"
-    assert config.web_acl_arn == "arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl"
+    assert (
+        config.web_acl_arn
+        == "arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl"
+    )
     assert config.user_stac_collection_transactions is None
     assert config.user_stac_catalogs is not None
     assert config.user_stac_catalogs.enabled is True
@@ -72,7 +84,8 @@ def test_missing_required_env_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_optional_env_vars(required_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
-        "CERTIFICATE_ARN", "arn:aws:acm:us-east-1:123456789012:certificate/optional-cert"
+        "CERTIFICATE_ARN",
+        "arn:aws:acm:us-east-1:123456789012:certificate/optional-cert",
     )
     monkeypatch.setenv("INGESTOR_DOMAIN_NAME", "ingestor.example.com")
     monkeypatch.setenv("TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME", "titiler.example.com")
@@ -86,8 +99,9 @@ def test_optional_env_vars(required_env: None, monkeypatch: pytest.MonkeyPatch) 
     assert config.titiler_pg_stac_api_custom_domain_name == "titiler.example.com"
 
 
-def test_user_stac_collection_transactions_defaults(required_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_ENABLED", "true")
+def test_user_stac_collection_transactions_defaults(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "basic")
 
     config = Config()
@@ -96,8 +110,9 @@ def test_user_stac_collection_transactions_defaults(required_env: None, monkeypa
     assert config.user_stac_collection_transactions.auth_secret_arn is None
 
 
-def test_user_stac_collection_transactions_accepts_secret(required_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_ENABLED", "true")
+def test_user_stac_collection_transactions_accepts_secret(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "basic")
     monkeypatch.setenv(
         "USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN",
@@ -115,25 +130,28 @@ def test_user_stac_collection_transactions_accepts_secret(required_env: None, mo
 def test_user_stac_collection_transactions_rejects_unsupported_auth_mode(
     required_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_ENABLED", "true")
     monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "jwt")
 
     with pytest.raises(ValueError, match='Expected "basic"'):
         Config()
 
 
-def test_user_stac_collection_transactions_rejects_invalid_boolean(
+def test_user_stac_collection_transactions_requires_auth_mode_when_secret_set(
     required_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_ENABLED", "yes")
+    monkeypatch.setenv(
+        "USER_STAC_COLLECTION_TRANSACTIONS_AUTH_SECRET_ARN",
+        "arn:aws:secretsmanager:us-west-2:123456789012:secret:user-stac-auth",
+    )
 
-    with pytest.raises(ValueError, match="Expected 'true' or 'false'"):
+    with pytest.raises(ValueError, match="AUTH_MODE"):
         Config()
 
 
-def test_user_stac_catalogs_and_catalog_transactions(required_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_user_stac_catalogs_and_catalog_transactions(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("USER_STAC_CATALOGS_HIDE_ALTERNATE_PARENTS", "true")
-    monkeypatch.setenv("USER_STAC_CATALOG_TRANSACTIONS_ENABLED", "true")
     monkeypatch.setenv("USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE", "basic")
     monkeypatch.setenv(
         "USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN",
@@ -155,10 +173,9 @@ def test_rejects_catalog_transactions_when_catalogs_disabled(
     required_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("USER_STAC_CATALOGS_ENABLED", "false")
-    monkeypatch.setenv("USER_STAC_CATALOG_TRANSACTIONS_ENABLED", "true")
     monkeypatch.setenv("USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE", "basic")
 
-    with pytest.raises(ValueError, match="requires USER_STAC_CATALOGS_ENABLED"):
+    with pytest.raises(ValueError, match="USER_STAC_CATALOGS_ENABLED is required"):
         Config()
 
 

@@ -113,17 +113,15 @@ class Config(BaseSettings):
     user_stac_inbound_topic_arns: Optional[list[str]] = None
     user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
 
-    # --- Collection transactions sub-fields (assembled by model_validator below) ---
-    user_stac_collection_transactions_enabled: Optional[bool] = None
+    # --- Collection transactions env fields ---
     user_stac_collection_transactions_auth_mode: Optional[str] = None
     user_stac_collection_transactions_auth_secret_arn: Optional[str] = None
-    user_stac_collection_transactions: Optional[CollectionTransactionsConfig] = None
-    user_stac_catalogs_enabled: Optional[bool] = None
+
+    # --- Catalog env fields ---
+    user_stac_catalogs_enabled: bool = True
     user_stac_catalogs_hide_alternate_parents: Optional[bool] = None
-    user_stac_catalog_transactions_enabled: Optional[bool] = None
     user_stac_catalog_transactions_auth_mode: Optional[str] = None
     user_stac_catalog_transactions_auth_secret_arn: Optional[str] = None
-    user_stac_catalogs: Optional[StacCatalogsConfig] = None
 
     @field_validator("db_instance_type", mode="before")
     @classmethod
@@ -136,10 +134,7 @@ class Config(BaseSettings):
             raise ValueError(f"Invalid DB_INSTANCE_TYPE: {v!r}") from e
 
     @field_validator(
-        "user_stac_collection_transactions_enabled",
-        "user_stac_catalogs_enabled",
         "user_stac_catalogs_hide_alternate_parents",
-        "user_stac_catalog_transactions_enabled",
         mode="before",
     )
     @classmethod
@@ -157,67 +152,93 @@ class Config(BaseSettings):
         if normalized == "false":
             return False
 
-        raise ValueError(
-            f"Invalid boolean value: {v!r}. Expected 'true' or 'false'."
-        )
+        raise ValueError(f"Invalid boolean value: {v!r}. Expected 'true' or 'false'.")
 
     @model_validator(mode="after")
-    def assemble_collection_transactions(self) -> Config:
-        if self.user_stac_collection_transactions_enabled is not True:
-            self.user_stac_collection_transactions = None
-        else:
-            if not self.user_stac_collection_transactions_auth_mode:
+    def validate_required_pairs(self) -> Config:
+        """Validate that related configuration fields are present together."""
+        pairs = [
+            (
+                "user_stac_collection_transactions_auth_secret_arn",
+                "user_stac_collection_transactions_auth_mode",
+            ),
+            (
+                "user_stac_catalog_transactions_auth_secret_arn",
+                "user_stac_catalog_transactions_auth_mode",
+            ),
+            (
+                "user_stac_catalog_transactions_auth_mode",
+                "user_stac_catalogs_enabled",
+            ),
+        ]
+        for trigger, required in pairs:
+            if getattr(self, trigger) and not getattr(self, required):
                 raise ValueError(
-                    "Must provide USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE "
-                    "when USER_STAC_COLLECTION_TRANSACTIONS_ENABLED=true"
+                    f"{required.upper()} is required when {trigger.upper()} is set"
                 )
-            if self.user_stac_collection_transactions_auth_mode != "basic":
-                raise ValueError(
-                    "Unsupported USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE: "
-                    f"{self.user_stac_collection_transactions_auth_mode}. "
-                    'Expected "basic".'
-                )
-            self.user_stac_collection_transactions = CollectionTransactionsConfig(
-                auth_mode=self.user_stac_collection_transactions_auth_mode,
-                auth_secret_arn=self.user_stac_collection_transactions_auth_secret_arn,
-            )
+        return self
 
-        catalogs_enabled = self.user_stac_catalogs_enabled
-        if catalogs_enabled is None:
-            catalogs_enabled = True
+    @model_validator(mode="after")
+    def validate_catalogs_config(self) -> Config:
+        enabled = self.user_stac_catalogs_enabled
+        auth_mode = self.user_stac_catalog_transactions_auth_mode
+        auth_secret_arn = self.user_stac_catalog_transactions_auth_secret_arn
 
-        catalog_transactions_enabled = self.user_stac_catalog_transactions_enabled is True
-        if catalog_transactions_enabled and not catalogs_enabled:
+        if (auth_mode or auth_secret_arn) and not enabled:
             raise ValueError(
-                "USER_STAC_CATALOG_TRANSACTIONS_ENABLED=true requires "
-                "USER_STAC_CATALOGS_ENABLED=true"
+                "USER_STAC_CATALOGS_ENABLED must be True when "
+                "USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE or "
+                "USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN is set."
             )
 
-        catalogs_transactions: Optional[CollectionTransactionsConfig] = None
-        if catalog_transactions_enabled:
-            if not self.user_stac_catalog_transactions_auth_mode:
-                raise ValueError(
-                    "Must provide USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE when "
-                    "USER_STAC_CATALOG_TRANSACTIONS_ENABLED=true"
-                )
-            if self.user_stac_catalog_transactions_auth_mode != "basic":
-                raise ValueError(
-                    "Unsupported USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE: "
-                    f"{self.user_stac_catalog_transactions_auth_mode}. "
-                    'Expected "basic".'
-                )
-            catalogs_transactions = CollectionTransactionsConfig(
+        if (auth_mode or auth_secret_arn) and auth_mode != "basic":
+            raise ValueError(
+                f"Unsupported USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE: "
+                f'"{auth_mode}". Expected "basic".'
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_collection_transactions(self) -> Config:
+        auth_mode = self.user_stac_collection_transactions_auth_mode
+        auth_secret_arn = self.user_stac_collection_transactions_auth_secret_arn
+
+        if (auth_mode or auth_secret_arn) and auth_mode != "basic":
+            raise ValueError(
+                f"Unsupported USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE: "
+                f'"{auth_mode}". Expected "basic".'
+            )
+
+        return self
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def user_stac_collection_transactions(
+        self,
+    ) -> Optional[CollectionTransactionsConfig]:
+        if self.user_stac_collection_transactions_auth_mode is None:
+            return None
+        return CollectionTransactionsConfig(
+            auth_mode=self.user_stac_collection_transactions_auth_mode,
+            auth_secret_arn=self.user_stac_collection_transactions_auth_secret_arn,
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def user_stac_catalogs(self) -> StacCatalogsConfig:
+        catalog_transactions: Optional[CollectionTransactionsConfig] = None
+        if self.user_stac_catalog_transactions_auth_mode is not None:
+            catalog_transactions = CollectionTransactionsConfig(
                 auth_mode=self.user_stac_catalog_transactions_auth_mode,
                 auth_secret_arn=self.user_stac_catalog_transactions_auth_secret_arn,
             )
 
-        self.user_stac_catalogs = StacCatalogsConfig(
-            enabled=catalogs_enabled,
+        return StacCatalogsConfig(
+            enabled=self.user_stac_catalogs_enabled,
             hide_alternate_parents=self.user_stac_catalogs_hide_alternate_parents,
-            transactions=catalogs_transactions,
+            transactions=catalog_transactions,
         )
-
-        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -235,29 +256,33 @@ class Config(BaseSettings):
             subnet_public=False,
         )
 
-    def stac_api(self, *, user_stac: bool = False) -> StacApiConfig:
-        if user_stac:
-            return StacApiConfig(
-                custom_domain_name=self.user_stac_stac_api_custom_domain_name,
-                transactions=self.user_stac_collection_transactions,
-                catalogs=self.user_stac_catalogs,
-            )
-
+    def public_stac_api(self) -> StacApiConfig:
         return StacApiConfig(
             custom_domain_name=self.stac_api_custom_domain_name,
             integration_api_arn=self.stac_api_integration_api_arn,
             catalogs=StacCatalogsConfig(enabled=True),
         )
 
-    def titiler_pgstac(self, *, user_stac: bool = False) -> TitilerPgstacConfig:
+    def user_stac_api(self) -> StacApiConfig:
+        return StacApiConfig(
+            custom_domain_name=self.user_stac_stac_api_custom_domain_name,
+            transactions=self.user_stac_collection_transactions,
+            catalogs=self.user_stac_catalogs,
+        )
+
+    def public_titiler_pgstac(self) -> TitilerPgstacConfig:
         return TitilerPgstacConfig(
             mosaic_host=self.mosaic_host,
             buckets_path="./titiler_buckets.yaml",
-            custom_domain_name=(
-                self.user_stac_titiler_pgstac_api_custom_domain_name
-                if user_stac
-                else self.titiler_pg_stac_api_custom_domain_name
-            ),
+            custom_domain_name=self.titiler_pg_stac_api_custom_domain_name,
+            data_access_role_arn=self.titiler_data_access_role_arn,
+        )
+
+    def user_titiler_pgstac(self) -> TitilerPgstacConfig:
+        return TitilerPgstacConfig(
+            mosaic_host=self.mosaic_host,
+            buckets_path="./titiler_buckets.yaml",
+            custom_domain_name=self.user_stac_titiler_pgstac_api_custom_domain_name,
             data_access_role_arn=self.titiler_data_access_role_arn,
         )
 

@@ -74,7 +74,9 @@ def test_catalog_routes_are_enabled_by_default() -> None:
     assert set(openapi["paths"]["/catalogs"].keys()) == {"get"}
     assert "/catalogs/{catalog_id}" in openapi["paths"]
     assert set(openapi["paths"]["/catalogs/{catalog_id}"].keys()) == {"get"}
-    assert "/catalogs/{catalog_id}/collections/{collection_id}/items" in openapi["paths"]
+    assert (
+        "/catalogs/{catalog_id}/collections/{collection_id}/items" in openapi["paths"]
+    )
     assert "post" not in openapi["paths"]["/catalogs"]
 
 
@@ -139,9 +141,7 @@ def test_catalog_transactions_are_opt_in() -> None:
 
     assert set(openapi["paths"]["/catalogs"].keys()) == {"get"}
     assert set(openapi["paths"]["/catalogs/{catalog_id}"].keys()) == {"get"}
-    assert set(openapi["paths"]["/catalogs/{catalog_id}/collections"].keys()) == {
-        "get"
-    }
+    assert set(openapi["paths"]["/catalogs/{catalog_id}/collections"].keys()) == {"get"}
 
 
 def test_catalog_transaction_routes_require_catalogs() -> None:
@@ -188,13 +188,9 @@ def test_catalog_transaction_app_registers_catalog_write_routes(
     assert set(
         openapi["paths"]["/catalogs/{catalog_id}/catalogs/{sub_catalog_id}"].keys()
     ) == {"delete"}
-    assert openapi["paths"]["/catalogs"]["post"]["security"] == [
-        {"HTTPBasic": []}
-    ]
+    assert openapi["paths"]["/catalogs"]["post"]["security"] == [{"HTTPBasic": []}]
     assert "security" not in openapi["paths"]["/catalogs"]["get"]
-    assert any(
-        "transaction" in item for item in app.state.catalogs_conformance_classes
-    )
+    assert any("transaction" in item for item in app.state.catalogs_conformance_classes)
 
 
 def test_catalog_conformance_is_read_only_without_catalog_transactions() -> None:
