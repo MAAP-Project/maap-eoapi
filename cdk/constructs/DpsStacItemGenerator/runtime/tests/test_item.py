@@ -305,7 +305,9 @@ class TestGetStacItems:
                 return_value=mock_job_metadata,
             ),
         ):
-            items = list(get_stac_items(catalog_s3_key, collection_id_registry=registry))
+            items = list(
+                get_stac_items(catalog_s3_key, collection_id_registry=registry)
+            )
 
         for item in items:
             assert item.collection == "test-collection"
@@ -326,7 +328,9 @@ class TestGetStacItems:
                 return_value=mock_job_metadata,
             ),
         ):
-            items = list(get_stac_items(catalog_s3_key, collection_id_registry=registry))
+            items = list(
+                get_stac_items(catalog_s3_key, collection_id_registry=registry)
+            )
 
         for item in items:
             assert item.collection == expected_collection_id
@@ -346,12 +350,16 @@ class TestGetStacItems:
                 return_value=mock_job_metadata,
             ),
         ):
-            items = list(get_stac_items(catalog_s3_key, collection_id_registry=registry))
+            items = list(
+                get_stac_items(catalog_s3_key, collection_id_registry=registry)
+            )
 
         for item in items:
             assert item.collection == "test-collection"
 
-    def test_empty_registry_uses_deterministic_id(self, mock_catalog, mock_job_metadata):
+    def test_empty_registry_uses_deterministic_id(
+        self, mock_catalog, mock_job_metadata
+    ):
         """An empty registry results in the deterministic collection ID for all items."""
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
         expected_collection_id = "superman__awesome-algo__0.1__test"

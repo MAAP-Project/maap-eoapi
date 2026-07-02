@@ -60,7 +60,9 @@ def test_read_only_app_omits_collection_transaction_routes() -> None:
     assert "/collections/{collection_id}/items" in openapi["paths"]
     assert set(openapi["paths"]["/collections/{collection_id}/items"].keys()) == {"get"}
     assert "/collections/{collection_id}/items/{item_id}" in openapi["paths"]
-    assert set(openapi["paths"]["/collections/{collection_id}/items/{item_id}"].keys()) == {"get"}
+    assert set(
+        openapi["paths"]["/collections/{collection_id}/items/{item_id}"].keys()
+    ) == {"get"}
 
 
 def test_catalog_routes_are_enabled_by_default() -> None:
@@ -72,7 +74,9 @@ def test_catalog_routes_are_enabled_by_default() -> None:
     assert set(openapi["paths"]["/catalogs"].keys()) == {"get"}
     assert "/catalogs/{catalog_id}" in openapi["paths"]
     assert set(openapi["paths"]["/catalogs/{catalog_id}"].keys()) == {"get"}
-    assert "/catalogs/{catalog_id}/collections/{collection_id}/items" in openapi["paths"]
+    assert (
+        "/catalogs/{catalog_id}/collections/{collection_id}/items" in openapi["paths"]
+    )
     assert "post" not in openapi["paths"]["/catalogs"]
 
 
@@ -137,9 +141,7 @@ def test_catalog_transactions_are_opt_in() -> None:
 
     assert set(openapi["paths"]["/catalogs"].keys()) == {"get"}
     assert set(openapi["paths"]["/catalogs/{catalog_id}"].keys()) == {"get"}
-    assert set(openapi["paths"]["/catalogs/{catalog_id}/collections"].keys()) == {
-        "get"
-    }
+    assert set(openapi["paths"]["/catalogs/{catalog_id}/collections"].keys()) == {"get"}
 
 
 def test_catalog_transaction_routes_require_catalogs() -> None:
@@ -186,13 +188,9 @@ def test_catalog_transaction_app_registers_catalog_write_routes(
     assert set(
         openapi["paths"]["/catalogs/{catalog_id}/catalogs/{sub_catalog_id}"].keys()
     ) == {"delete"}
-    assert openapi["paths"]["/catalogs"]["post"]["security"] == [
-        {"HTTPBasic": []}
-    ]
+    assert openapi["paths"]["/catalogs"]["post"]["security"] == [{"HTTPBasic": []}]
     assert "security" not in openapi["paths"]["/catalogs"]["get"]
-    assert any(
-        "transaction" in item for item in app.state.catalogs_conformance_classes
-    )
+    assert any("transaction" in item for item in app.state.catalogs_conformance_classes)
 
 
 def test_catalog_conformance_is_read_only_without_catalog_transactions() -> None:
@@ -221,8 +219,13 @@ def test_collection_transaction_app_registers_collection_only_routes(
         "delete",
     }
     assert set(openapi["paths"]["/collections/{collection_id}/items"].keys()) == {"get"}
-    assert set(openapi["paths"]["/collections/{collection_id}/items/{item_id}"].keys()) == {"get"}
-    assert {parameter["name"] for parameter in openapi["paths"]["/collections"]["get"]["parameters"]} >= {
+    assert set(
+        openapi["paths"]["/collections/{collection_id}/items/{item_id}"].keys()
+    ) == {"get"}
+    assert {
+        parameter["name"]
+        for parameter in openapi["paths"]["/collections"]["get"]["parameters"]
+    } >= {
         "query",
         "sortby",
     }
@@ -258,8 +261,12 @@ def test_openapi_and_conformance_advertise_collection_transactions_only(
     assert "/collections/test/items" not in openapi["paths"]
     assert "/collections/{collection_id}/items/{item_id}" in openapi["paths"]
     assert "put" not in openapi["paths"]["/collections/{collection_id}/items/{item_id}"]
-    assert "patch" not in openapi["paths"]["/collections/{collection_id}/items/{item_id}"]
-    assert "delete" not in openapi["paths"]["/collections/{collection_id}/items/{item_id}"]
+    assert (
+        "patch" not in openapi["paths"]["/collections/{collection_id}/items/{item_id}"]
+    )
+    assert (
+        "delete" not in openapi["paths"]["/collections/{collection_id}/items/{item_id}"]
+    )
     assert openapi["components"]["securitySchemes"]["HTTPBasic"] == {
         "type": "http",
         "scheme": "basic",
@@ -281,8 +288,14 @@ def test_openapi_and_conformance_advertise_collection_transactions_only(
 
     assert response.status_code == 200
     conformance_classes = response.json()["conformsTo"]
-    assert "https://api.stacspec.org/v1.0.0/collections/extensions/transaction" in conformance_classes
-    assert "https://api.stacspec.org/v1.0.0/ogcapi-features/extensions/transaction" not in conformance_classes
+    assert (
+        "https://api.stacspec.org/v1.0.0/collections/extensions/transaction"
+        in conformance_classes
+    )
+    assert (
+        "https://api.stacspec.org/v1.0.0/ogcapi-features/extensions/transaction"
+        not in conformance_classes
+    )
 
 
 def test_parse_enabled_extensions_rejects_malformed_values() -> None:

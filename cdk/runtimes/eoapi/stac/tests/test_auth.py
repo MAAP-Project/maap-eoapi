@@ -54,7 +54,11 @@ def collection_transaction_app(
 ) -> Iterator[TestClient]:
     """Build a transaction-enabled app using env-provided credentials."""
     app = create_app(
-        enabled_extensions={"query", "collection_search", COLLECTION_TRANSACTION_EXTENSION},
+        enabled_extensions={
+            "query",
+            "collection_search",
+            COLLECTION_TRANSACTION_EXTENSION,
+        },
         connect_to_database=False,
     )
     with TestClient(app) as client:
@@ -117,7 +121,8 @@ def test_collection_write_routes_receive_transaction_auth_dependency(
     protected_routes = {
         (route.path, next(iter(route.methods))): route
         for route in collection_transaction_app.app.routes
-        if getattr(route, "path", None) in {"/collections", "/collections/{collection_id}"}
+        if getattr(route, "path", None)
+        in {"/collections", "/collections/{collection_id}"}
         and getattr(route, "methods", None)
         and next(iter(route.methods)) in {"POST", "PUT", "PATCH", "DELETE"}
     }
@@ -217,9 +222,7 @@ def test_catalog_write_openapi_security_matches_collection_writes(
     """Catalog write operations should advertise HTTP Basic auth in OpenAPI."""
     openapi = catalog_transaction_app.app.openapi()
 
-    assert openapi["paths"]["/catalogs"]["post"]["security"] == [
-        {"HTTPBasic": []}
-    ]
+    assert openapi["paths"]["/catalogs"]["post"]["security"] == [{"HTTPBasic": []}]
     assert openapi["paths"]["/catalogs/{catalog_id}"]["put"]["security"] == [
         {"HTTPBasic": []}
     ]

@@ -1,16 +1,12 @@
-*.js
-!jest.config.js
-*.d.ts
-node_modules
-
 .pyc
 __pycache__
+.pytest_cache
 .venv
-.env
-.envrc
+.env*
 .env-test
 .test-env
 .DS_Store
+.ruff_cache
 
 # CDK asset staging directory
 .cdk.staging

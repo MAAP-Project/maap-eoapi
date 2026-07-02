@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts cdk/app.ts",
+  "app": "python app.py",
   "watch": {
     "include": ["**"],
     "exclude": [
@@ -7,11 +7,11 @@
       "cdk*.json",
       "**/*.d.ts",
       "**/*.js",
-      "tsconfig.json",
-      "package*.json",
-      "yarn.lock",
       "node_modules",
-      "test"
+      "tests",
+      "**/__pycache__",
+      "**/.venv",
+      "uv.lock"
     ]
   },
   "context": {

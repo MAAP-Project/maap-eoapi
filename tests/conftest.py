@@ -21,6 +21,7 @@ def test_collection(stac_ingestion_instance):
 def test_item(stac_ingestion_instance):
     return stac_ingestion_instance.get_test_item()
 
+
 @pytest.fixture(scope="module")
 def test_titiler_search_request(stac_ingestion_instance):
     return stac_ingestion_instance.get_test_titiler_search_request()
