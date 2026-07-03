@@ -1,0 +1,40 @@
+name: Update uv lockfile for Dependabot
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  update-lockfile:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Update lockfile
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          if [[ "$BRANCH" == *"raster-dependencies"* ]]; then
+            cd cdk/runtimes/eoapi/raster && uv lock
+          elif [[ "$BRANCH" == *"stac-dependencies"* ]]; then
+            cd cdk/runtimes/eoapi/stac && uv lock
+          else
+            uv lock
+          fi
+
+      - name: Commit lockfile
+        run: |
+          git config user.name "dependabot[bot]"
+          git config user.email "dependabot[bot]@users.noreply.github.com"
+          git add uv.lock
+          git diff --staged --quiet || git commit -m "chore: update uv.lock"
+          git push

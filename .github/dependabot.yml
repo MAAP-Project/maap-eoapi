@@ -16,8 +16,36 @@ updates:
     schedule:
       interval: monthly
     groups:
-      python-dependencies:
+      cdk-dependencies:
         patterns:
           - "*"
     cooldown:
       default-days: 30
+    commit-message:
+      prefix: "chore(cdk)"
+
+  - package-ecosystem: uv
+    directory: /cdk/runtimes/eoapi/raster
+    schedule:
+      interval: monthly
+    groups:
+      raster-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 30
+    commit-message:
+      prefix: "chore(raster)"
+
+  - package-ecosystem: uv
+    directory: /cdk/runtimes/eoapi/stac
+    schedule:
+      interval: monthly
+    groups:
+      stac-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 30
+    commit-message:
+      prefix: "chore(stac-api)"
