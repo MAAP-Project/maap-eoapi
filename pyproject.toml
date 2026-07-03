@@ -4,7 +4,7 @@ version = "0.0"
 requires-python = ">=3.12"
 dependencies = [
     "aws-cdk-lib==2.220.0",
-    "constructs==10.4.2",
+    "constructs==10.6.0",
     "eoapi-cdk>=11.6.0",
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
@@ -21,7 +21,7 @@ dev = [
     "aws-lambda-typing>=2.20.0",
     "boto3>=1.34",
     "pytest>=8.0",
-    "pystac[validation]>=1.0",
+    "pystac[validation]>=1.14.3",
     "requests>=2.31",
 ]
 
