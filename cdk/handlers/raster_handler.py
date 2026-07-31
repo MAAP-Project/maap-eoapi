@@ -124,7 +124,7 @@ async def log_request_data(request: Request, call_next):
 if "AWS_EXECUTION_ENV" in os.environ:
     logger.info("Lambda Init: Running FastAPI startup events")
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(app.router.startup())
+    loop.run_until_complete(startup_event())
     logger.info("Lambda Init: FastAPI startup complete")
 
 
