@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aws-cdk-lib==2.220.0",
     "constructs==10.4.2",
-    "eoapi-cdk>=11.6.0",
+    "eoapi-cdk@git+https://github.com/developmentseed/eoapi-cdk.git@feat/support-stac-browser-v5.x",
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
 ]
