@@ -180,13 +180,16 @@ def get_stac_items(
                 (item_dict.get("stac_extensions") or []) + [DPS_STAC_EXTENSION]
             )
         )
-        links = item_dict.setdefault("links", [])
-        if not any(
-            link.get("rel") == "via" and link.get("href") == met_json_href
-            for link in links
-        ):
-            links.append(
-                {"rel": "via", "href": met_json_href, "type": "application/json"}
-            )
+        item_dict.setdefault("assets", {})["dps-metadata"] = {
+            "href": met_json_href,
+            "type": "application/json",
+            "roles": ["metadata"],
+            "title": "DPS job metadata",
+        }
+        item_dict["links"] = [
+            link
+            for link in item_dict.get("links", [])
+            if not (link.get("rel") == "via" and link.get("href") == met_json_href)
+        ]
 
         yield Item(**item_dict)

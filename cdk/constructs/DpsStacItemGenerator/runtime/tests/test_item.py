@@ -97,7 +97,13 @@ class TestGetStacItems:
                 ],
             },
             "bbox": [-180, -90, 180, 90],
-            "links": [],
+            "links": [
+                {
+                    "rel": "via",
+                    "href": "s3://test-bucket/2023/01/15/10/30/45/123456/.met.json",
+                    "type": "application/json",
+                }
+            ],
             "assets": {},
             "stac_extensions": [
                 "https://example.com/existing-extension.json",
@@ -175,11 +181,17 @@ class TestGetStacItems:
                     "https://example.com/existing-extension.json",
                     "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
                 ]
-                assert {
-                    "rel": "via",
+                assert item.model_dump()["assets"]["dps-metadata"] == {
                     "href": expected_met_json_href,
                     "type": "application/json",
-                } in item.model_dump()["links"]
+                    "roles": ["metadata"],
+                    "title": "DPS job metadata",
+                }
+                assert not any(
+                    link.get("rel") == "via"
+                    and link.get("href") == expected_met_json_href
+                    for link in item.model_dump()["links"]
+                )
 
             mock_catalog.make_all_asset_hrefs_absolute.assert_called_once()
             mock_catalog.get_all_items.assert_called_once()
