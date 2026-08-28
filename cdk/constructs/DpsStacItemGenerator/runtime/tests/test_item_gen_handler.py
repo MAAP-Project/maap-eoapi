@@ -1,5 +1,7 @@
 import json
 import logging
+from datetime import datetime
+from datetime import timezone
 import os
 from unittest.mock import MagicMock, patch
 
@@ -585,24 +587,19 @@ def test_handler_registry_preserves_authorized_collection_id(
 
     mock_catalog = MagicMock(spec=pystac.Catalog)
     mock_catalog.make_all_asset_hrefs_absolute.return_value = None
-    pystac_item = MagicMock()
-    pystac_item.to_dict.return_value = {
-        "type": "Feature",
-        "stac_version": "1.0.0",
-        "id": "test-item",
-        "collection": "my-custom-collection",
-        "properties": {"datetime": "2023-01-01T00:00:00Z"},
-        "geometry": {
+    pystac_item = pystac.Item(
+        id="test-item",
+        geometry={
             "type": "Polygon",
             "coordinates": [
                 [[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]
             ],
         },
-        "bbox": [-180, -90, 180, 90],
-        "links": [],
-        "assets": {},
-        "stac_extensions": [],
-    }
+        bbox=[-180, -90, 180, 90],
+        datetime=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        properties={},
+        collection="my-custom-collection",
+    )
     mock_catalog.get_all_items.return_value = [pystac_item]
 
     job_metadata = {

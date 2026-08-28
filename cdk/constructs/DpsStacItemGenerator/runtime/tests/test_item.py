@@ -1,3 +1,5 @@
+from datetime import datetime as DateTime
+from datetime import timezone
 from unittest.mock import MagicMock, patch
 
 import pystac
@@ -83,52 +85,47 @@ class TestGetStacItems:
         """Create a mock STAC catalog with items."""
         catalog = MagicMock(spec=pystac.Catalog)
 
-        item1 = MagicMock()
-        item1.to_dict.return_value = {
-            "type": "Feature",
-            "stac_version": "1.0.0",
-            "id": "item1",
-            "collection": "test-collection",
-            "properties": {"datetime": "2023-01-01T00:00:00Z"},
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [
-                    [[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]
-                ],
-            },
-            "bbox": [-180, -90, 180, 90],
-            "links": [
-                {
-                    "rel": "via",
-                    "href": "s3://test-bucket/2023/01/15/10/30/45/123456/.met.json",
-                    "type": "application/json",
-                }
-            ],
-            "assets": {},
-            "stac_extensions": [
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [[[-180, -90], [180, -90], [180, 90], [-180, -90]]],
+        }
+        item1 = pystac.Item(
+            id="item1",
+            geometry=geometry,
+            bbox=[-180, -90, 180, 90],
+            datetime=DateTime(2023, 1, 1, tzinfo=timezone.utc),
+            properties={"created": "2000-01-01T00:00:00Z"},
+            collection="test-collection",
+            stac_extensions=[
                 "https://example.com/existing-extension.json",
                 "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
                 "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
             ],
-        }
-        item2 = MagicMock()
-        item2.to_dict.return_value = {
-            "type": "Feature",
-            "stac_version": "1.0.0",
-            "id": "item2",
-            "collection": "test-collection",
-            "properties": {"datetime": "2023-01-02T00:00:00Z"},
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [
-                    [[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]
-                ],
-            },
-            "bbox": [-180, -90, 180, 90],
-            "links": [],
-            "assets": {},
-            "stac_extensions": ["https://example.com/existing-extension.json"],
-        }
+        )
+        item1.add_link(
+            pystac.Link(
+                "via",
+                "s3://test-bucket/2023/01/15/10/30/45/123456/.met.json",
+                media_type="application/json",
+            )
+        )
+        item2 = pystac.Item(
+            id="item2",
+            geometry=geometry,
+            bbox=[-180, -90, 180, 90],
+            datetime=DateTime(2023, 1, 2, tzinfo=timezone.utc),
+            properties={},
+            collection="test-collection",
+            stac_extensions=["https://example.com/existing-extension.json"],
+        )
+        item2.add_asset(
+            "existing-data",
+            pystac.Asset(
+                "s3://test-bucket/2023/01/15/10/30/45/123456/data.tif",
+                media_type="image/tiff",
+                roles=["data"],
+            ),
+        )
         catalog.get_all_items.return_value = [item1, item2]
         catalog.make_all_asset_hrefs_absolute.return_value = None
 
@@ -149,6 +146,8 @@ class TestGetStacItems:
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
         expected_collection_id = "superman__awesome-algo__0.1"
         expected_met_json_href = "s3://test-bucket/2023/01/15/10/30/45/123456/.met.json"
+        processing_time = DateTime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+        expected_created = "2024-01-02T03:04:05Z"
 
         with (
             patch(
@@ -162,7 +161,9 @@ class TestGetStacItems:
                     "2023/01/15/10/30/45/123456/.met.json",
                 ),
             ),
+            patch("dps_stac_item_generator.item.datetime") as mock_datetime,
         ):
+            mock_datetime.now.return_value = processing_time
             items = list(get_stac_items(catalog_s3_key))
 
             assert len(items) == 2
@@ -176,7 +177,9 @@ class TestGetStacItems:
                     "maap-dps:algorithm_version": "0.1",
                     "maap-dps:username": "superman",
                     "maap-dps:tag": "test",
+                    "created": item.properties.created,
                 }
+                assert item.properties.created == processing_time
                 assert [str(extension) for extension in item.stac_extensions] == [
                     "https://example.com/existing-extension.json",
                     "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
@@ -187,12 +190,19 @@ class TestGetStacItems:
                     "roles": ["metadata"],
                     "title": "DPS job metadata",
                 }
+                if item.id == "item2":
+                    assert "existing-data" in item.model_dump()["assets"]
                 assert not any(
                     link.get("rel") == "via"
                     and link.get("href") == expected_met_json_href
                     for link in item.model_dump()["links"]
                 )
 
+            mock_datetime.now.assert_called_once_with(timezone.utc)
+            assert all(
+                item.properties["created"] == expected_created
+                for item in mock_catalog.get_all_items.return_value
+            )
             mock_catalog.make_all_asset_hrefs_absolute.assert_called_once()
             mock_catalog.get_all_items.assert_called_once()
 

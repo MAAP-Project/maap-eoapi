@@ -2,13 +2,14 @@ import fnmatch
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Any, Generator, Optional, Union
 from urllib.parse import urlparse
 
 import obstore
 import pystac
 from obstore.store import from_url
-from pystac import Link
+from pystac import Asset, Link
 from pystac.stac_io import DefaultStacIO, StacIO
 from slugify import slugify
 from stac_pydantic.item import Item
@@ -150,13 +151,13 @@ def get_stac_items(
     )
     username = job_metadata.get("username", "")
     met_json_href = f"s3://{s3_key_parsed.netloc}/{met_json_key.lstrip('/')}"
+    processing_time = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     catalog = pystac.Catalog.from_file(catalog_json_key)
     catalog.make_all_asset_hrefs_absolute()
 
     for item in catalog.get_all_items():
-        item_dict = item.to_dict()
-        item_collection_id = item_dict.get("collection")
+        item_collection_id = item.collection_id
 
         if item_collection_id and is_authorized(username, item_collection_id, registry):
             logger.info(
@@ -165,31 +166,33 @@ def get_stac_items(
                 username,
             )
         else:
-            item_dict["collection"] = deterministic_collection_id
+            item.collection_id = deterministic_collection_id
 
-        item_dict.setdefault("properties", {}).update(
+        item.properties.update(
             {
                 "maap-dps:algorithm_name": job_metadata["algorithm_name"],
                 "maap-dps:algorithm_version": job_metadata["algorithm_version"],
                 "maap-dps:username": job_metadata["username"],
                 "maap-dps:tag": job_metadata["tag"],
+                "created": processing_time,
             }
         )
-        item_dict["stac_extensions"] = list(
-            dict.fromkeys(
-                (item_dict.get("stac_extensions") or []) + [DPS_STAC_EXTENSION]
-            )
+        item.stac_extensions[:] = list(dict.fromkeys(item.stac_extensions))
+        if DPS_STAC_EXTENSION not in item.stac_extensions:
+            item.stac_extensions.append(DPS_STAC_EXTENSION)
+        item.add_asset(
+            "dps-metadata",
+            Asset(
+                href=met_json_href,
+                media_type="application/json",
+                roles=["metadata"],
+                title="DPS job metadata",
+            ),
         )
-        item_dict.setdefault("assets", {})["dps-metadata"] = {
-            "href": met_json_href,
-            "type": "application/json",
-            "roles": ["metadata"],
-            "title": "DPS job metadata",
-        }
-        item_dict["links"] = [
+        item.links = [
             link
-            for link in item_dict.get("links", [])
-            if not (link.get("rel") == "via" and link.get("href") == met_json_href)
+            for link in item.links
+            if not (link.rel == "via" and link.href == met_json_href)
         ]
 
-        yield Item(**item_dict)
+        yield Item(**item.to_dict())
