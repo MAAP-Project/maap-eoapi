@@ -23,6 +23,15 @@ User STAC catalog configuration:
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` enables catalog write routes and selects the supported auth mode. Catalog write routes require catalogs to stay enabled.
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN` can point at an existing auth secret.
 
+## DPS-generated STAC items
+
+The DPS item generator assigns unregistered items to collections named
+`{username}__{algorithm_name}__{algorithm_version}`. Authorized user-supplied
+collection IDs are preserved. Generated items include the filterable
+`maap-dps:algorithm_name`, `maap-dps:algorithm_version`, `maap-dps:username`,
+and `maap-dps:tag` properties, the MAAP DPS STAC extension, and a `via` link to
+the source `.met.json` file.
+
 Collection-only STAC transactions can still be enabled with:
 
 - `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE=basic`

@@ -2,7 +2,7 @@ import fnmatch
 import json
 import logging
 import re
-from typing import Any, Dict, Generator, Optional, Union
+from typing import Any, Generator, Optional, Union
 from urllib.parse import urlparse
 
 import obstore
@@ -16,7 +16,10 @@ from stac_pydantic.item import Item
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}__{tag}"
+COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
+DPS_STAC_EXTENSION = (
+    "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json"
+)
 
 
 class ObstoreStacIO(DefaultStacIO):
@@ -63,18 +66,24 @@ def get_dps_output_prefix(s3_key) -> Optional[str]:
     return None
 
 
-def load_met_json(bucket: str, job_output_prefix: str) -> Optional[Dict[str, str]]:
-    """Load the .met.json file that gets uploaded with DPS job outputs"""
+def load_met_json(
+    bucket: str, job_output_prefix: str
+) -> tuple[dict[str, str], str] | None:
+    """Load DPS metadata and return its discovered object key."""
     store = from_url(f"s3://{bucket}/{job_output_prefix}")
     stream = obstore.list(store, chunk_size=10)
     for list_result in stream:
         for result in list_result:
-            if result["path"].endswith("met.json"):
-                return json.loads(
-                    obstore.get(store, result["path"])
-                    .bytes()
-                    .to_bytes()
-                    .decode("utf-8")
+            met_json_key = result["path"]
+            if met_json_key.endswith("met.json"):
+                return (
+                    json.loads(
+                        obstore.get(store, met_json_key)
+                        .bytes()
+                        .to_bytes()
+                        .decode("utf-8")
+                    ),
+                    met_json_key,
                 )
 
 
@@ -129,16 +138,18 @@ def get_stac_items(
 
     s3_key_parsed = urlparse(catalog_json_key)
 
-    job_metadata = load_met_json(s3_key_parsed.netloc, job_output_prefix)
-    if not job_metadata:
+    met_json = load_met_json(s3_key_parsed.netloc, job_output_prefix)
+    if not met_json:
         raise ValueError(
             f"could not locate the .met.json file with the DPS job outputs in {job_output_prefix}"
         )
 
+    job_metadata, met_json_key = met_json
     deterministic_collection_id = slugify(
         COLLECTION_ID_FORMAT.format(**job_metadata), regex_pattern=r"[/\?#%& ]+"
     )
     username = job_metadata.get("username", "")
+    met_json_href = f"s3://{s3_key_parsed.netloc}/{met_json_key.lstrip('/')}"
 
     catalog = pystac.Catalog.from_file(catalog_json_key)
     catalog.make_all_asset_hrefs_absolute()
@@ -155,5 +166,27 @@ def get_stac_items(
             )
         else:
             item_dict["collection"] = deterministic_collection_id
+
+        item_dict.setdefault("properties", {}).update(
+            {
+                "maap-dps:algorithm_name": job_metadata["algorithm_name"],
+                "maap-dps:algorithm_version": job_metadata["algorithm_version"],
+                "maap-dps:username": job_metadata["username"],
+                "maap-dps:tag": job_metadata["tag"],
+            }
+        )
+        item_dict["stac_extensions"] = list(
+            dict.fromkeys(
+                (item_dict.get("stac_extensions") or []) + [DPS_STAC_EXTENSION]
+            )
+        )
+        links = item_dict.setdefault("links", [])
+        if not any(
+            link.get("rel") == "via" and link.get("href") == met_json_href
+            for link in links
+        ):
+            links.append(
+                {"rel": "via", "href": met_json_href, "type": "application/json"}
+            )
 
         yield Item(**item_dict)

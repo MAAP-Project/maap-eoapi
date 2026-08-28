@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pystac
 import pytest
-from dps_stac_item_generator.item import get_stac_items, is_authorized
+from dps_stac_item_generator.item import get_stac_items, is_authorized, load_met_json
 from stac_pydantic.item import Item
 
 
@@ -45,6 +45,39 @@ class TestIsAuthorized:
 class TestGetStacItems:
     """Test cases for get_stac_items function."""
 
+    def test_load_met_json_returns_discovered_key(self):
+        store = MagicMock()
+        met_json_object = MagicMock()
+        met_json_object.bytes.return_value.to_bytes.return_value.decode.return_value = (
+            '{"algorithm_name": "awesome-algo"}'
+        )
+        with (
+            patch("dps_stac_item_generator.item.from_url", return_value=store),
+            patch(
+                "dps_stac_item_generator.item.obstore.list",
+                return_value=[
+                    [
+                        {"path": "2023/01/15/10/30/45/123456/catalog.json"},
+                        {"path": "2023/01/15/10/30/45/123456/job.met.json"},
+                    ]
+                ],
+            ) as mock_list,
+            patch(
+                "dps_stac_item_generator.item.obstore.get",
+                return_value=met_json_object,
+            ) as mock_get,
+        ):
+            result = load_met_json("test-bucket", "2023/01/15/10/30/45/123456/")
+
+        assert result == (
+            {"algorithm_name": "awesome-algo"},
+            "2023/01/15/10/30/45/123456/job.met.json",
+        )
+        mock_list.assert_called_once_with(store, chunk_size=10)
+        mock_get.assert_called_once_with(
+            store, "2023/01/15/10/30/45/123456/job.met.json"
+        )
+
     @pytest.fixture
     def mock_catalog(self):
         """Create a mock STAC catalog with items."""
@@ -66,7 +99,11 @@ class TestGetStacItems:
             "bbox": [-180, -90, 180, 90],
             "links": [],
             "assets": {},
-            "stac_extensions": [],
+            "stac_extensions": [
+                "https://example.com/existing-extension.json",
+                "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
+                "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
+            ],
         }
         item2 = MagicMock()
         item2.to_dict.return_value = {
@@ -84,7 +121,7 @@ class TestGetStacItems:
             "bbox": [-180, -90, 180, 90],
             "links": [],
             "assets": {},
-            "stac_extensions": [],
+            "stac_extensions": ["https://example.com/existing-extension.json"],
         }
         catalog.get_all_items.return_value = [item1, item2]
         catalog.make_all_asset_hrefs_absolute.return_value = None
@@ -104,7 +141,8 @@ class TestGetStacItems:
     def test_get_stac_items_success(self, mock_catalog, mock_job_metadata):
         """Test successful generation of STAC items from catalog."""
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
-        expected_collection_id = "superman__awesome-algo__0.1__test"
+        expected_collection_id = "superman__awesome-algo__0.1"
+        expected_met_json_href = "s3://test-bucket/2023/01/15/10/30/45/123456/.met.json"
 
         with (
             patch(
@@ -113,7 +151,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(get_stac_items(catalog_s3_key))
@@ -123,6 +164,22 @@ class TestGetStacItems:
             for item in items:
                 assert isinstance(item, Item)
                 assert item.collection == expected_collection_id
+                assert item.properties.model_dump() == {
+                    "datetime": item.properties.datetime,
+                    "maap-dps:algorithm_name": "awesome-algo",
+                    "maap-dps:algorithm_version": "0.1",
+                    "maap-dps:username": "superman",
+                    "maap-dps:tag": "test",
+                }
+                assert [str(extension) for extension in item.stac_extensions] == [
+                    "https://example.com/existing-extension.json",
+                    "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
+                ]
+                assert {
+                    "rel": "via",
+                    "href": expected_met_json_href,
+                    "type": "application/json",
+                } in item.model_dump()["links"]
 
             mock_catalog.make_all_asset_hrefs_absolute.assert_called_once()
             mock_catalog.get_all_items.assert_called_once()
@@ -140,7 +197,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             with pytest.raises(
@@ -175,7 +235,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ) as mock_load_met,
         ):
             list(get_stac_items(catalog_s3_key))
@@ -198,7 +261,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(get_stac_items(catalog_s3_key))
@@ -218,7 +284,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             with pytest.raises(Exception, match="Failed to load catalog"):
@@ -235,7 +304,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items_generator = get_stac_items(catalog_s3_key)
@@ -256,7 +328,10 @@ class TestGetStacItems:
         with (
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
             patch(
                 "dps_stac_item_generator.item.pystac.Catalog.from_file",
@@ -273,7 +348,7 @@ class TestGetStacItems:
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
         mock_job_metadata["username"] = "user/name"
         mock_job_metadata["algorithm_name"] = "algo?name"
-        expected_collection_id = "user-name__algo-name__0.1__test"
+        expected_collection_id = "user-name__algo-name__0.1"
 
         with (
             patch(
@@ -282,7 +357,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(get_stac_items(catalog_s3_key))
@@ -302,7 +380,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(
@@ -316,7 +397,7 @@ class TestGetStacItems:
         """Items get the deterministic ID when the user is not authorized."""
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
         registry = {"test-collection": ["other-user"]}
-        expected_collection_id = "superman__awesome-algo__0.1__test"
+        expected_collection_id = "superman__awesome-algo__0.1"
 
         with (
             patch(
@@ -325,7 +406,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(
@@ -347,7 +431,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(
@@ -362,7 +449,7 @@ class TestGetStacItems:
     ):
         """An empty registry results in the deterministic collection ID for all items."""
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
-        expected_collection_id = "superman__awesome-algo__0.1__test"
+        expected_collection_id = "superman__awesome-algo__0.1"
 
         with (
             patch(
@@ -371,7 +458,10 @@ class TestGetStacItems:
             ),
             patch(
                 "dps_stac_item_generator.item.load_met_json",
-                return_value=mock_job_metadata,
+                return_value=(
+                    mock_job_metadata,
+                    "2023/01/15/10/30/45/123456/.met.json",
+                ),
             ),
         ):
             items = list(get_stac_items(catalog_s3_key, collection_id_registry={}))

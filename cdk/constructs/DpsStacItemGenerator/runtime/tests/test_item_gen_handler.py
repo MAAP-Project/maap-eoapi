@@ -619,7 +619,7 @@ def test_handler_registry_preserves_authorized_collection_id(
         ),
         patch(
             "dps_stac_item_generator.item.load_met_json",
-            return_value=job_metadata,
+            return_value=(job_metadata, "2023/01/15/10/30/45/123456/.met.json"),
         ),
     ):
         result = item_gen_handler.handler(event, mock_context)
