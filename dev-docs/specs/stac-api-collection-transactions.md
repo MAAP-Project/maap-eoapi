@@ -1,9 +1,11 @@
 # Spec: STAC API collection transactions runtime
 
 ## Context
+
 MAAP eoAPI currently deploys the stock `eoapi-cdk` pgSTAC STAC API Lambda through `PgStacApiLambda` in `cdk/PgStacInfra.ts`. That runtime exposes the standard read-only STAC API and can enable the upstream STAC transaction extension.
 
 The problem is that upstream `stac-fastapi` transaction support is all-or-nothing:
+
 - enabling `TransactionExtension` registers both collection and item write routes
 - it advertises both collection and item transaction conformance classes
 - it exposes those routes in OpenAPI docs
@@ -13,6 +15,7 @@ For MAAP, we only want collection-level transactions for now. We do not want ite
 We also want to preserve a clean path to using `developmentseed/stac-auth-proxy` inside the runtime as in-process middleware rather than only as a separate reverse proxy. That project already provides OIDC/JWT enforcement, OpenAPI security augmentation, STAC Authentication Extension responses, and policy-driven filtering. Its docs explicitly support applying the middleware stack to an existing FastAPI app via `configure_app(...)`, which makes it relevant to the long-term auth design here.
 
 ## Goals
+
 - Add a custom STAC API runtime under `cdk/runtimes/eoapi/stac/`.
 - Support collection transaction routes only:
   - `POST /collections`
@@ -31,6 +34,7 @@ We also want to preserve a clean path to using `developmentseed/stac-auth-proxy`
 - Leave a clean path to JWT-based auth later.
 
 ## Non-goals
+
 - Implement JWT auth now.
 - Deploy `stac-auth-proxy` as a separate standalone reverse proxy in front of the Lambda as part of this first change.
 - Add item-level transaction support.
@@ -39,6 +43,7 @@ We also want to preserve a clean path to using `developmentseed/stac-auth-proxy`
 - Upstream a general-purpose fix to `stac-fastapi` as part of this change.
 
 ## Constraints and Assumptions
+
 - Current STAC API deployment uses `eoapi-cdk` `PgStacApiLambda`.
 - `eoapi-cdk` already supports overriding Lambda code via `lambdaFunctionOptions.code` and `handler`.
 - Upstream `stac-fastapi-pgstac` v6.2 runtime imports `app` from `stac_fastapi.pgstac.app`, not `stac_fastapi.pgstac.main`.
@@ -50,6 +55,7 @@ We also want to preserve a clean path to using `developmentseed/stac-auth-proxy`
 - We should minimize blast radius for the public STAC deployment.
 
 ## Architecture Overview
+
 The change has two layers.
 
 1. Runtime layer
@@ -73,6 +79,7 @@ This keeps route behavior read-only unless transactions are explicitly enabled, 
 ## Runtime Design
 
 ### File layout
+
 Proposed layout:
 
 ```text
@@ -97,9 +104,11 @@ docker-compose.yml
 ```
 
 ### App construction
+
 `eoapi/stac/main.py` will build the FastAPI app.
 
 Implementation approach:
+
 - make `eoapi/stac/main.py` a near 1:1 copy of `/home/henry/workspace/stac-utils/stac-fastapi-pgstac/stac_fastapi/pgstac/app.py`
 - keep upstream app construction, middleware, lifespan wiring, request-model setup, and extension composition aligned as closely as possible
 - continue to use upstream pgSTAC clients for core read behavior
@@ -108,6 +117,7 @@ Implementation approach:
 - instead, register a local `CollectionTransactionExtension` in the same spot, with the rest of the app structure staying unchanged unless MAAP has a specific reason to diverge
 
 Why copy the app closely instead of mutating the upstream app after import?
+
 - removing routes after registration is brittle
 - conformance classes and docs become easy to miss
 - auth attachment is cleaner when routes are created locally
@@ -115,9 +125,11 @@ Why copy the app closely instead of mutating the upstream app after import?
 - keeping the file near-identical to upstream makes future drift easier to review and reduce
 
 ### CollectionTransactionExtension
+
 Add a local extension in `eoapi/stac/transactions.py`.
 
 It should:
+
 - subclass `TransactionExtension`
 - set `conformance_classes = [TransactionConformanceClasses.COLLECTIONS]`
 - implement the same collection transaction route contracts as upstream
@@ -150,9 +162,11 @@ https://api.stacspec.org/v1.0.0/ogcapi-features/extensions/transaction
 This should stay intentionally small: reuse upstream route helper methods such as `register_create_collection()` and only narrow the registered surface, rather than forking transaction route implementations.
 
 ### Auth model
+
 Add a small auth abstraction in `eoapi/stac/auth.py`.
 
 Initial and planned modes:
+
 - `basic` for the first implementation
 - `oidc` as the future mode backed by `stac-auth-proxy` middleware
 
@@ -164,6 +178,7 @@ async def require_transaction_auth(request: Request) -> None:
 ```
 
 Behavior in `basic` mode:
+
 - passed through `TransactionExtension(..., route_dependencies=[...])` when collection transactions are enabled
 - applied only to collection transaction routes
 - no effect on read-only routes
@@ -171,6 +186,7 @@ Behavior in `basic` mode:
 - should not be wired per-route manually unless the upstream release plan changes
 
 Basic auth credential source:
+
 - Lambda env contains `MAAP_TRANSACTION_AUTH_MODE=basic`
 - Lambda env contains `MAAP_TRANSACTION_AUTH_SECRET_ARN=<secret arn>`
 - referenced secret payload format:
@@ -183,6 +199,7 @@ Basic auth credential source:
 ```
 
 Planned `oidc` mode using `stac-auth-proxy` middleware:
+
 - do not run the full reverse proxy app in front of the Lambda
 - instead, apply the middleware stack to the in-process FastAPI app, using `stac_auth_proxy.configure_app(app, settings=...)` or selected middleware classes directly if we need tighter control
 - configure path/method protection so only collection transaction routes are private:
@@ -199,15 +216,18 @@ Planned `oidc` mode using `stac-auth-proxy` middleware:
 - leave filtering middleware disabled unless and until we explicitly adopt record-level authorization
 
 Why this is a future path rather than the first implementation:
+
 - `stac-auth-proxy` currently assumes OIDC/JWT, not Basic auth
 - our immediate need is a minimal collection-write guard
 - the in-process middleware route is still valuable because it gives us a ready-made JWT/OIDC layer later without adding a separate network hop
 
 Future JWT compatibility:
+
 - auth dispatch should be mode-based, not hardcoded inside route handlers
 - adding `oidc` later should require selecting a different auth provider, not rewriting collection transaction routes
 
 ### Runtime environment variables
+
 The custom runtime should support these env vars in addition to existing STAC API env vars:
 
 ```text
@@ -219,6 +239,7 @@ MAAP_ALLOWED_JWT_AUDIENCES=aud1,aud2
 ```
 
 Rules:
+
 - if `collection_transaction` is not in the `ENABLED_EXTENSIONS` env var, do not register the transaction endpoints
 - if enabled and auth mode is `basic`, secret ARN is required
 - if enabled and auth mode is `oidc`, OIDC discovery URL is required
@@ -226,9 +247,11 @@ Rules:
 - the runtime may internally map MAAP env vars into `stac-auth-proxy` settings rather than exposing the proxy's full env surface directly
 
 ### DB connection behavior
+
 The runtime must create a write pool only when collection transactions are enabled.
 
 Equivalent intent to upstream:
+
 - read-only deployments use read pool only
 - transaction-enabled deployments initialize write pool too
 
@@ -237,6 +260,7 @@ Equivalent intent to upstream:
 ## API or Interface Design
 
 ### TypeScript props
+
 Add a new optional transactions block under `stacApiConfig`.
 
 ```ts
@@ -254,6 +278,7 @@ stacApiConfig: {
 ```
 
 Validation rules:
+
 - `transactions` omitted => current behavior
 - `transactions.enabled === false` => current behavior
 - `transactions.enabled === true` and `authMode === "basic"` => `authSecretArn` required
@@ -261,6 +286,7 @@ Validation rules:
 - `transactions.enabled === true` and `authMode === "oidc"` with audience enforcement => `allowedJwtAudiences` optional but recommended
 
 ### CDK usage
+
 Initial intended usage in `cdk/app.ts`:
 
 - `coreInfrastructure`: no transactions block
@@ -280,7 +306,9 @@ stacApiConfig: {
 ```
 
 ### Runtime override in PgStacInfra
+
 For all deployments:
+
 - keep using `new PgStacApiLambda(...)`
 - pass `lambdaFunctionOptions.code = lambda.Code.fromDockerBuild(...)`
 - pass `lambdaFunctionOptions.handler = "handler.handler"`
@@ -292,11 +320,13 @@ When transactions are enabled, also pass auth env vars and, for `basic` mode, se
 This preserves existing API Gateway, custom domain, VPC, DB, and SnapStart behavior managed by `eoapi-cdk` while standardizing on one MAAP-owned runtime.
 
 ## Data Model
+
 No database schema change is required.
 
 New configuration data introduced:
 
 ### CDK deployment config
+
 ```ts
 interface StacTransactionsConfig {
   enabled: boolean;
@@ -308,6 +338,7 @@ interface StacTransactionsConfig {
 ```
 
 ### Secrets Manager payload for basic auth
+
 ```json
 {
   "username": "stac-writer",
@@ -318,7 +349,9 @@ interface StacTransactionsConfig {
 ## Integration Points
 
 ### `cdk/PgStacInfra.ts`
+
 Changes:
+
 - extend `Props.stacApiConfig`
 - always use the custom STAC runtime override for the STAC API Lambda
 - grant transaction auth secret read access to the STAC API Lambda when needed
@@ -326,11 +359,14 @@ Changes:
 - keep disabled deployments on the read-only path inside the shared custom runtime
 
 ### `cdk/app.ts`
+
 Changes:
+
 - wire transactions config only for `userInfrastructure`
 - leave `coreInfrastructure` unchanged
 
 ### `cdk/config.ts`
+
 Add optional config values for the user stack, for example:
 
 ```text
@@ -344,19 +380,24 @@ USER_STAC_COLLECTION_TRANSACTIONS_ALLOWED_JWT_AUDIENCES
 These should default to disabled when unset.
 
 ### Tests
+
 Likely touch points:
+
 - `test/config.test.ts` for config parsing
 - new unit or synth-level tests for `PgStacInfra` transaction config behavior
 - runtime tests for auth and route exposure
 - if we add `oidc` mode later, runtime tests that `stac-auth-proxy` middleware protects only collection transaction routes and leaves read routes untouched
 
 ### Docs
+
 Update at least:
+
 - repo `README.md` if deployment configuration is user-facing
 - runtime `README.md` under `cdk/runtimes/eoapi/stac/`
 - `docker-compose.yml` usage notes for local runtime development
 
 ## Migration Path
+
 1. Add custom runtime package and Dockerfile.
 2. Add a local `docker-compose.yml` for the custom STAC and raster runtimes, following the shape of `/home/henry/workspace/devseed/eoapi-devseed/docker-compose.yml` where it still fits this repo.
 3. Copy `stac_fastapi.pgstac.app` into the MAAP runtime as a near 1:1 local app, swapping in `CollectionTransactionExtension` for the default transaction extension.
@@ -377,7 +418,9 @@ No backfill or data migration is required.
 ## Testing Strategy
 
 ### Runtime tests
+
 Add Python tests around the custom app builder:
+
 - transactions disabled => no write routes present
 - transactions enabled => collection write routes present
 - item write routes absent
@@ -389,7 +432,9 @@ Add Python tests around the custom app builder:
 - future `oidc` mode protects only the collection transaction endpoints when configured with collection-only private endpoint regexes
 
 ### Infrastructure tests
+
 Add TypeScript tests for:
+
 - config parsing defaults to disabled
 - enabling basic auth without secret ARN throws
 - all deployments use the custom Lambda handler/code override
@@ -397,14 +442,18 @@ Add TypeScript tests for:
 - disabled mode omits transaction auth env vars and keeps read-only behavior
 
 ### Local development checks
+
 Add local verification for `docker-compose.yml`:
+
 - custom STAC runtime starts against local pgSTAC
 - custom raster runtime starts alongside it
 - disabled-mode STAC startup works before the auth-hook release lands
 - compose configuration remains usable for the final auth-enabled verification pass once PR #885 is available
 
 ### Smoke tests
+
 Post-deploy manual/API checks:
+
 - `GET /` and `GET /conformance`
 - `POST /collections` with and without auth
 - `PUT/PATCH/DELETE /collections/{collection_id}` with auth
@@ -412,8 +461,9 @@ Post-deploy manual/API checks:
 - Swagger/OpenAPI should not document item transaction routes
 
 ## Decision Log
+
 | Decision | Options Considered | Rationale |
-|----------|--------------------|-----------|
+| ---------- | -------------------- | ----------- |
 | Use one custom runtime for all STAC deployments | Only use the custom runtime when transactions are enabled; patch routes in place; use stock runtime unchanged | Keeps route behavior switchable per deployment while avoiding two runtime code paths for the same API surface |
 | Keep a near 1:1 local copy of `stac_fastapi.pgstac.app` | Mutate the upstream app after import; reassemble a more custom MAAP app from smaller pieces | A near-identical copy keeps behavior aligned with upstream while making the transaction-extension substitution explicit and reviewable |
 | Implement a collection-only extension | Monkeypatch the upstream router | A local extension is explicit, testable, and resilient to upstream internal changes |
@@ -423,6 +473,7 @@ Post-deploy manual/API checks:
 | Omit item transaction routes entirely | Expose them but block with auth/authorization | Not registering them is safer and keeps docs/conformance honest |
 
 ## Open Questions
+
 - Should failed item transaction requests return `404` or an explicit `403` from a defensive blocker route? The cleaner default is `404` by not registering them.
 - Do we want to add explicit public-stack transaction config now for symmetry, or keep the config surface user-stack-only until there is a real second use case?
 - Should basic auth credentials be a single shared writer credential, or do we expect multiple clients soon enough to justify a richer secret format?
@@ -434,6 +485,7 @@ Post-deploy manual/API checks:
 - Is there any existing upstream work toward collection-only transaction registration that we may want to track before maintaining this long term?
 
 ## References
+
 - `cdk/PgStacInfra.ts`
 - `cdk/app.ts`
 - `cdk/config.ts`

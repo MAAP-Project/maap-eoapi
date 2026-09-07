@@ -6,21 +6,20 @@ import asyncio
 from collections.abc import Iterator
 
 import pytest
+from eoapi.stac import auth
+from eoapi.stac.main import (
+    CATALOG_TRANSACTION_EXTENSION,
+    CATALOGS_EXTENSION,
+    COLLECTION_TRANSACTION_EXTENSION,
+    create_app,
+)
 from fastapi.security import HTTPBasicCredentials
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from eoapi.stac import auth
-from eoapi.stac.main import (
-    CATALOGS_EXTENSION,
-    CATALOG_TRANSACTION_EXTENSION,
-    COLLECTION_TRANSACTION_EXTENSION,
-    create_app,
-)
-
 
 @pytest.fixture(autouse=True)
-def reload_transaction_auth_settings() -> None:
+def reload_transaction_auth_settings() -> Iterator[None]:
     """Refresh auth settings after env changes in each test."""
     auth.reset_transaction_auth_state()
     yield
@@ -206,8 +205,7 @@ def test_catalog_write_routes_receive_transaction_auth_dependency(
         route
         for route in catalog_transaction_app.app.routes
         if getattr(route, "path", None) in write_methods_by_path
-        and getattr(route, "methods", set())
-        & write_methods_by_path[getattr(route, "path")]
+        and getattr(route, "methods", set()) & write_methods_by_path[route.path]
     ]
 
     assert len(protected_routes) == 8

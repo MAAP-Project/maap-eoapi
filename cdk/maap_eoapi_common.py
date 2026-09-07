@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import aws_cdk as cdk
 from aws_cdk import aws_s3 as s3
-from constructs import Construct
+
+if TYPE_CHECKING:
+    from constructs import Construct
 
 
 class MaapEoapiCommon(cdk.Stack):
     """
     MaapEoapiCommon Stack
 
-    This stack contains shared resources that are used by both the pgSTAC and userSTAC stacks.
-    Any resources that need to be accessed or referenced by multiple stacks should be placed here
+    This stack contains shared resources that are used by both the pgSTAC and userSTAC.
+    Any resources that need to be accessed or referenced by multiple stacks goes here
     to avoid circular dependencies and ensure proper resource sharing.
 
     Examples of shared resources include:
@@ -24,7 +28,7 @@ class MaapEoapiCommon(cdk.Stack):
 
     logging_bucket: s3.Bucket
     """S3 bucket for centralized logging across all MAAP eoAPI stacks.
-    Used by both pgSTAC and userSTAC stacks for storing access logs and other operational logs.
+    Used by both pgSTAC and userSTAC stacks for storing access/operational logs.
     """
 
     def __init__(

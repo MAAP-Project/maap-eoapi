@@ -23,5 +23,4 @@ def get_secret_dict(secret_name: str):
 
     if "SecretString" in get_secret_value_response:
         return json.loads(get_secret_value_response["SecretString"])
-    else:
-        return json.loads(base64.b64decode(get_secret_value_response["SecretBinary"]))
+    return json.loads(base64.b64decode(get_secret_value_response["SecretBinary"]))

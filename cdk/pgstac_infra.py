@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
+import eoapi_cdk
 import yaml
 from aws_cdk import (
     Aws,
@@ -27,23 +27,21 @@ from aws_cdk import (
 )
 
 from .config import (
+    DpsStacItemGenConfig,
+    IngestorConfig,
     PgStacDbConfig,
-    TitilerPgstacConfig,
     StacApiConfig,
     StacBrowserConfig,
-    IngestorConfig,
-    DpsStacItemGenConfig,
     StacCatalogsConfig,
+    TitilerPgstacConfig,
 )
-
-from constructs import Construct
-
-import eoapi_cdk
-
 from .constructs.dps_stac_item_generator import (
     DpsStacItemGenerator,
     DpsStacItemGeneratorProps,
 )
+
+if TYPE_CHECKING:
+    from constructs import Construct
 
 _CDK_DIR = Path(__file__).parent
 
@@ -63,15 +61,13 @@ class PgStacInfra(Stack):
         pgstac_db_config: PgStacDbConfig,
         titiler_pgstac_config: TitilerPgstacConfig,
         stac_api_config: StacApiConfig,
-        certificate_arn: Optional[
-            str
-        ] = None,  # ARN of ACM certificate for eoAPI custom domains.
-        stac_browser_config: Optional[
-            StacBrowserConfig
-        ] = None,  # Omit to skip STAC Browser.
-        ingestor_config: Optional[IngestorConfig] = None,  # Omit to skip STAC Ingestor.
-        dps_stac_item_gen_config: Optional[DpsStacItemGenConfig] = None,
-        add_stactools_item_generator: Optional[bool] = None,
+        certificate_arn: str
+        | None = None,  # ARN of ACM certificate for eoAPI custom domains.
+        stac_browser_config: StacBrowserConfig
+        | None = None,  # Omit to skip STAC Browser.
+        ingestor_config: IngestorConfig | None = None,  # Omit to skip STAC Ingestor.
+        dps_stac_item_gen_config: DpsStacItemGenConfig | None = None,
+        add_stactools_item_generator: bool | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, id, **kwargs)
@@ -114,7 +110,9 @@ class PgStacInfra(Stack):
                 "pgbouncer-instance-id-param",
                 parameter_name=f"/maap-eoapi/{stage}/{type}/pgbouncer-instance-id",
                 string_value=pgstac_db.pgbouncer_instance_id,
-                description=f"PgBouncer EC2 instance ID for MAAP eoAPI {type} stack ({stage})",
+                description=(
+                    f"PgBouncer EC2 instance ID for MAAP eoAPI {type} stack ({stage})"
+                ),
             )
 
         api_subnet_selection = ec2.SubnetSelection(
@@ -162,7 +160,7 @@ class PgStacInfra(Stack):
 
         if write_transactions_config:
             if write_transactions_config.auth_secret_arn:
-                transaction_auth_secret: Optional[secretsmanager.ISecret] = (
+                transaction_auth_secret: secretsmanager.ISecret | None = (
                     secretsmanager.Secret.from_secret_complete_arn(
                         self,
                         "stac-collection-transaction-auth-secret",
@@ -220,7 +218,9 @@ class PgStacInfra(Stack):
             **(
                 {
                     "MAAP_TRANSACTION_AUTH_MODE": write_transactions_config.auth_mode,
-                    "MAAP_TRANSACTION_AUTH_SECRET_ARN": transaction_auth_secret.secret_arn,  # type: ignore[union-attr]
+                    "MAAP_TRANSACTION_AUTH_SECRET_ARN": (
+                        transaction_auth_secret.secret_arn  # type: ignore [union-attr]
+                    ),
                 }
                 if write_transactions_config
                 else {}
@@ -303,7 +303,7 @@ class PgStacInfra(Stack):
             titiler_pgstac_config.data_access_role_arn,
         )
 
-        with open(titiler_pgstac_config.buckets_path, "r") as f:
+        with open(titiler_pgstac_config.buckets_path) as f:
             buckets: list[str] = yaml.safe_load(f)
 
         titiler_pgstac_lambda_options = {

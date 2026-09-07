@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
 from dataclasses import dataclass
+from typing import Literal
+
 from aws_cdk import aws_ec2 as ec2
 from pydantic import (
     AliasChoices,
@@ -25,22 +26,25 @@ class PgStacDbConfig:
 class TitilerPgstacConfig:
     buckets_path: str
     data_access_role_arn: str
-    mosaic_host: Optional[str] = None
-    custom_domain_name: Optional[str] = None
+    mosaic_host: str | None = None
+    custom_domain_name: str | None = None
+
+
+TransactionAuthMode = Literal["basic", "jwt"]
 
 
 @dataclass
 class CollectionTransactionsConfig:
-    auth_mode: Literal["basic", "jwt"]
-    auth_secret_arn: Optional[str] = None
+    auth_mode: TransactionAuthMode
+    auth_secret_arn: str | None = None
 
 
 @dataclass
 class StacApiConfig:
-    custom_domain_name: Optional[str] = None
-    integration_api_arn: Optional[str] = None
-    transactions: Optional[CollectionTransactionsConfig] = None
-    catalogs: Optional["StacCatalogsConfig"] = None
+    custom_domain_name: str | None = None
+    integration_api_arn: str | None = None
+    transactions: CollectionTransactionsConfig | None = None
+    catalogs: StacCatalogsConfig | None = None
 
 
 @dataclass
@@ -55,21 +59,21 @@ class IngestorConfig:
     jwks_url: str
     data_access_role_arn: str
     user_data_path: str
-    domain_name: Optional[str] = None
+    domain_name: str | None = None
 
 
 @dataclass
 class DpsStacItemGenConfig:
     item_gen_role_arn: str
-    inbound_topic_arns: Optional[list[str]] = None
-    user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
+    inbound_topic_arns: list[str] | None = None
+    user_stac_collection_id_registry: dict[str, list[str]] | None = None
 
 
 @dataclass
 class StacCatalogsConfig:
     enabled: bool
-    hide_alternate_parents: Optional[bool] = None
-    transactions: Optional[CollectionTransactionsConfig] = None
+    hide_alternate_parents: bool | None = None
+    transactions: CollectionTransactionsConfig | None = None
 
 
 class Config(BaseSettings):
@@ -97,31 +101,48 @@ class Config(BaseSettings):
 
     # --- Optional ---
     version: str = "0.1.1"
-    certificate_arn: Optional[str] = None
-    ingestor_domain_name: Optional[str] = None
+    certificate_arn: str | None = None
+    ingestor_domain_name: str | None = None
     # env var is TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME (no underscore between pg/stac)
-    titiler_pg_stac_api_custom_domain_name: Optional[str] = Field(
+    titiler_pg_stac_api_custom_domain_name: str | None = Field(
         None,
         validation_alias=AliasChoices(
             "titiler_pgstac_api_custom_domain_name",
             "titiler_pg_stac_api_custom_domain_name",
         ),
     )
-    user_stac_item_gen_role_arn: Optional[str] = None
-    user_stac_stac_api_custom_domain_name: Optional[str] = None
-    user_stac_titiler_pgstac_api_custom_domain_name: Optional[str] = None
-    user_stac_inbound_topic_arns: Optional[list[str]] = None
-    user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
+    user_stac_item_gen_role_arn: str | None = None
+    user_stac_stac_api_custom_domain_name: str | None = None
+    user_stac_titiler_pgstac_api_custom_domain_name: str | None = None
+    user_stac_inbound_topic_arns: list[str] | None = None
+    user_stac_collection_id_registry: dict[str, list[str]] | None = None
 
     # --- Collection transactions env fields ---
-    user_stac_collection_transactions_auth_mode: Optional[str] = None
-    user_stac_collection_transactions_auth_secret_arn: Optional[str] = None
+    user_stac_collection_transactions_auth_mode: TransactionAuthMode | None = None
+    user_stac_collection_transactions_auth_secret_arn: str | None = None
 
     # --- Catalog env fields ---
     user_stac_catalogs_enabled: bool = True
-    user_stac_catalogs_hide_alternate_parents: Optional[bool] = None
-    user_stac_catalog_transactions_auth_mode: Optional[str] = None
-    user_stac_catalog_transactions_auth_secret_arn: Optional[str] = None
+    user_stac_catalogs_hide_alternate_parents: bool | None = None
+    user_stac_catalog_transactions_auth_mode: TransactionAuthMode | None = None
+    user_stac_catalog_transactions_auth_secret_arn: str | None = None
+
+    @field_validator(
+        "user_stac_collection_transactions_auth_mode",
+        "user_stac_catalog_transactions_auth_mode",
+        mode="before",
+    )
+    @classmethod
+    def parse_auth_mode(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            normalized = v.strip().lower()
+            if normalized in {"basic", "jwt"}:
+                return normalized
+        raise ValueError(
+            f"Unsupported auth mode: {v!r}. Expected one of: 'basic', 'jwt'."
+        )
 
     @field_validator("db_instance_type", mode="before")
     @classmethod
@@ -138,7 +159,7 @@ class Config(BaseSettings):
         mode="before",
     )
     @classmethod
-    def parse_optional_bool_env(cls, v: object) -> Optional[bool]:
+    def parse_optional_bool_env(cls, v: object) -> bool | None:
         if v is None:
             return None
         if isinstance(v, bool):
@@ -216,7 +237,7 @@ class Config(BaseSettings):
     @property
     def user_stac_collection_transactions(
         self,
-    ) -> Optional[CollectionTransactionsConfig]:
+    ) -> CollectionTransactionsConfig | None:
         if self.user_stac_collection_transactions_auth_mode is None:
             return None
         return CollectionTransactionsConfig(
@@ -227,7 +248,7 @@ class Config(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def user_stac_catalogs(self) -> StacCatalogsConfig:
-        catalog_transactions: Optional[CollectionTransactionsConfig] = None
+        catalog_transactions: CollectionTransactionsConfig | None = None
         if self.user_stac_catalog_transactions_auth_mode is not None:
             catalog_transactions = CollectionTransactionsConfig(
                 auth_mode=self.user_stac_catalog_transactions_auth_mode,
@@ -301,7 +322,7 @@ class Config(BaseSettings):
             user_data_path="./userdata.yaml",
         )
 
-    def dps_stac_item_gen(self) -> Optional[DpsStacItemGenConfig]:
+    def dps_stac_item_gen(self) -> DpsStacItemGenConfig | None:
         if not self.user_stac_item_gen_role_arn:
             return None
         return DpsStacItemGenConfig(

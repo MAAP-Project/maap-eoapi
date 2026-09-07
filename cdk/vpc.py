@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import aws_cdk as cdk
 from aws_cdk import aws_ec2 as ec2
-from constructs import Construct
+
+if TYPE_CHECKING:
+    from constructs import Construct
 
 
 class VpcStack(cdk.Stack):
@@ -15,7 +17,7 @@ class VpcStack(cdk.Stack):
         scope: Construct,
         id: str,
         *,
-        nat_gateway_count: Optional[int] = None,  # Default: one per availability zone.
+        nat_gateway_count: int | None = None,  # Default: one per availability zone.
         **kwargs,
     ) -> None:
         super().__init__(scope, id, **kwargs)

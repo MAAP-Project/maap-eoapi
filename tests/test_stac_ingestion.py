@@ -1,6 +1,7 @@
-import pytest
-import pystac
 import time
+
+import pystac
+import pytest
 
 
 # Test validating the collection
@@ -60,12 +61,13 @@ def test_titiler_pgstac(
     time.sleep(10)
     asset_query_response = stac_ingestion_instance.list_mosaic_assets(search_id)
     assert asset_query_response.status_code in [200, 201], (
-        f"Failed to query the mosaic's assets for mosaic {search_id} :\n{asset_query_response.text}"
+        f"Failed to query the mosaic's assets for mosaic {search_id} :\n"
+        f"{asset_query_response.text}"
     )
     assets_json = asset_query_response.json()
     # expects a single item in the collection
     assert len(assets_json) == 1
-    assert all([k in assets_json[0]["assets"] for k in test_item["assets"].keys()])
+    assert all(k in assets_json[0]["assets"] for k in test_item["assets"])
 
 
 # Test querying items and verifying inserted items

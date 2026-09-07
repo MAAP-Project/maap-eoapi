@@ -52,3 +52,8 @@ path = "eoapi/raster/__init__.py"
 [tool.pdm.build]
 includes = ["eoapi/raster"]
 excludes = ["tests/", "**/.mypy_cache", "**/.DS_Store"]
+
+[tool.ruff.lint]
+select = [
+    "FAST",    # fastapi
+]

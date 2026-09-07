@@ -22,9 +22,9 @@ jobs:
     name: "CDK Operations"
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    
+
     environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_environment || 'synthtest' }}
-    
+
     env:
       AUTHOR: ${{ github.actor }}
       CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
@@ -55,7 +55,7 @@ jobs:
       USER_STAC_STAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.USER_STAC_STAC_API_CUSTOM_DOMAIN_NAME }}
       USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME: ${{ vars.USER_STAC_TITILER_PGSTAC_API_CUSTOM_DOMAIN_NAME }}
       WEB_ACL_ARN: ${{ vars.WEB_ACL_ARN }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,7 +89,7 @@ jobs:
         run: |
           echo "INGESTOR_DATA_ACCESS_ROLE_ARN=${{ steps.import-stacks-vars-to-output.outputs.INGESTOR_DATA_ACCESS_ROLE_ARN }}" >> $GITHUB_ENV
           echo "JWKS_URL=${{ steps.import-stacks-vars-to-output.outputs.JWKS_URL }}" >> $GITHUB_ENV
-      
+
       - name: Set fallback dynamic variables for synthtest
         if: github.event_name != 'workflow_dispatch'
         run: |

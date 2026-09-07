@@ -278,7 +278,7 @@ def create_app(
     ]
     if item_collection_extensions:
         items_get_request_model = cast(
-            type[APIRequest],
+            "type[APIRequest]",
             create_request_model(
                 model_name="ItemCollectionUri",
                 base_model=ItemCollectionUri,

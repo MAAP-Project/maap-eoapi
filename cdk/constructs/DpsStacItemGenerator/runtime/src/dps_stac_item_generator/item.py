@@ -2,7 +2,8 @@ import fnmatch
 import json
 import logging
 import re
-from typing import Any, Dict, Generator, Optional, Union
+from collections.abc import Generator
+from typing import Any
 from urllib.parse import urlparse
 
 import obstore
@@ -20,7 +21,7 @@ COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}__{tag}
 
 
 class ObstoreStacIO(DefaultStacIO):
-    def read_text(self, source: Union[str, Link], *args: Any, **kwargs: Any) -> str:
+    def read_text(self, source: str | Link, *args: Any, **kwargs: Any) -> str:
         parsed = urlparse(str(source))
         key = parsed.path[1:]
         store = from_url(f"{parsed.scheme}://{parsed.netloc}")
@@ -28,9 +29,7 @@ class ObstoreStacIO(DefaultStacIO):
         obj = obstore.get(store, key)
         return obj.bytes().to_bytes().decode("utf-8")
 
-    def write_text(
-        self, dest: Union[str, Link], txt: str, *args: Any, **kwargs: Any
-    ) -> None:
+    def write_text(self, dest: str | Link, txt: str, *args: Any, **kwargs: Any) -> None:
         parsed = urlparse(str(dest))
         key = parsed.path[1:]
         store = from_url(f"{parsed.scheme}://{parsed.netloc}")
@@ -40,7 +39,7 @@ class ObstoreStacIO(DefaultStacIO):
 StacIO.set_default(ObstoreStacIO)
 
 
-def get_dps_output_prefix(s3_key) -> Optional[str]:
+def get_dps_output_prefix(s3_key) -> str | None:
     """
     Find the S3 key prefix for the outputs associated with a DPS job
 
@@ -63,7 +62,7 @@ def get_dps_output_prefix(s3_key) -> Optional[str]:
     return None
 
 
-def load_met_json(bucket: str, job_output_prefix: str) -> Optional[Dict[str, str]]:
+def load_met_json(bucket: str, job_output_prefix: str) -> dict[str, str] | None:
     """Load the .met.json file that gets uploaded with DPS job outputs"""
     store = from_url(f"s3://{bucket}/{job_output_prefix}")
     stream = obstore.list(store, chunk_size=10)
@@ -76,6 +75,7 @@ def load_met_json(bucket: str, job_output_prefix: str) -> Optional[Dict[str, str
                     .to_bytes()
                     .decode("utf-8")
                 )
+    return None
 
 
 def is_authorized(
@@ -132,7 +132,8 @@ def get_stac_items(
     job_metadata = load_met_json(s3_key_parsed.netloc, job_output_prefix)
     if not job_metadata:
         raise ValueError(
-            f"could not locate the .met.json file with the DPS job outputs in {job_output_prefix}"
+            "could not locate the .met.json file "
+            f"with the DPS job outputs in {job_output_prefix}"
         )
 
     deterministic_collection_id = slugify(

@@ -8,8 +8,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story 1A: Single DPS Job Output Cataloging
 
-**As a** researcher running a data processing job,  
-**I want to** have the outputs of my DPS job automatically cataloged in the user-STAC,  
+**As a** researcher running a data processing job,
+**I want to** have the outputs of my DPS job automatically cataloged in the user-STAC,
 **So that** I can easily discover, access, visualize, and share my processed data products.
 
 **Acceptance Criteria:**
@@ -25,8 +25,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story 1B: Batch DPS Job Output Cataloging
 
-**As a** researcher running multiple related DPS jobs,  
-**I want to** catalog outputs from thousands of related jobs under a single collection,  
+**As a** researcher running multiple related DPS jobs,
+**I want to** catalog outputs from thousands of related jobs under a single collection,
 **So that** I can easily discover, access, visualize, and share my processed data products.
 
 **Acceptance Criteria:**
@@ -44,8 +44,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story 2A: Manual File List Cataloging
 
-**As a** user with existing data files,  
-**I want to** catalog a specific list of files in the user-STAC,  
+**As a** user with existing data files,
+**I want to** catalog a specific list of files in the user-STAC,
 **So that** I can make my pre-existing data discoverable and accessible.
 
 **Acceptance Criteria:**
@@ -61,8 +61,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story 2B: Bulk File Discovery and Cataloging
 
-**As a** user with a large dataset in cloud storage,  
-**I want to** discover and catalog all files matching certain patterns,  
+**As a** user with a large dataset in cloud storage,
+**I want to** discover and catalog all files matching certain patterns,
 **So that** I can efficiently manage large collections without manual listing.
 
 **Acceptance Criteria:**
@@ -81,8 +81,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story 3A: Standard Dataset Publication by Data Team
 
-**As a** MAAP data team member with administrative privileges,  
-**I want to** publish a new standard dataset to the public-STAC,  
+**As a** MAAP data team member with administrative privileges,
+**I want to** publish a new standard dataset to the public-STAC,
 **So that** all MAAP users can discover and use authoritative datasets.
 
 **Acceptance Criteria:**
@@ -93,8 +93,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story 3B: Dataset Updates by Data Team
 
-**As a** MAAP data team member with administrative privileges,  
-**I want to** update an existing collection in the public-STAC,  
+**As a** MAAP data team member with administrative privileges,
+**I want to** update an existing collection in the public-STAC,
 **So that** users have access to the latest data and metadata.
 
 **Acceptance Criteria:**
@@ -110,8 +110,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story CC1: Metadata Generation Configuration
 
-**As a** user,  
-**I want to** configure how STAC metadata is generated for my assets,  
+**As a** user,
+**I want to** configure how STAC metadata is generated for my assets,
 **So that** the metadata accurately represents my data's characteristics.
 
 **Acceptance Criteria:**
@@ -123,8 +123,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story CC2: Ingestion Monitoring
 
-**As a** user who has submitted data for cataloging,  
-**I want to** monitor the progress and status of my ingestion jobs,  
+**As a** user who has submitted data for cataloging,
+**I want to** monitor the progress and status of my ingestion jobs,
 **So that** I can troubleshoot issues and verify completion.
 
 **Acceptance Criteria:**
@@ -136,8 +136,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story CC3: Authentication and Authorization
 
-**As a** MAAP administrator,  
-**I want to** control who can ingest data into which collections,  
+**As a** MAAP administrator,
+**I want to** control who can ingest data into which collections,
 **So that** data integrity and security are maintained.
 
 **Acceptance Criteria:**
@@ -151,8 +151,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story CC4: Collection Ownership
 
-**As a** user creating a collection in the user-STAC,  
-**I want to** have exclusive write access to my collection,  
+**As a** user creating a collection in the user-STAC,
+**I want to** have exclusive write access to my collection,
 **So that** I can maintain control over the data and metadata I publish.
 
 **Acceptance Criteria:**
@@ -165,8 +165,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story CC5: Default Collection Management
 
-**As a** user of the MAAP platform,  
-**I want to** have a default collection created for me automatically,  
+**As a** user of the MAAP platform,
+**I want to** have a default collection created for me automatically,
 **So that** I can immediately start cataloging items without manual collection setup.
 
 **Acceptance Criteria:**
@@ -178,8 +178,8 @@ This document captures the user stories for all use cases of the MAAP STAC metad
 
 ### User Story CC6: Simplified Metadata Generation for Non-STAC Experts
 
-**As a** user with limited knowledge of STAC standards,  
-**I want to** easily catalog my data with minimal technical overhead,  
+**As a** user with limited knowledge of STAC standards,
+**I want to** easily catalog my data with minimal technical overhead,
 **So that** I can make my data discoverable without needing to become a STAC expert.
 
 **Acceptance Criteria:**

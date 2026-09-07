@@ -6,7 +6,7 @@ import os
 import uuid
 from asyncio import wait_for
 from functools import partial
-from typing import Annotated, Dict, List, Optional
+from typing import Annotated, Optional
 from urllib.parse import urlencode
 
 import morecantile
@@ -15,6 +15,16 @@ from attrs import define
 from cogeo_mosaic.backends import DynamoDBBackend
 from cogeo_mosaic.errors import MosaicError
 from cogeo_mosaic.mosaic import MosaicJSON
+from eoapi.raster.models import (
+    Link,
+    MosaicEntity,
+    StacApiQueryRequestBody,
+    StoreException,
+    TooManyResultsException,
+    UnsupportedOperationException,
+    UrisRequestBody,
+)
+from eoapi.raster.settings import MosaicSettings
 from fastapi import Depends, Header, HTTPException, Path, Query
 from pydantic import Field
 from pystac_client import Client
@@ -29,17 +39,6 @@ from titiler.core.resources.enums import ImageType, MediaType, OptionalHeader
 from titiler.core.resources.responses import JSONResponse, XMLResponse
 from titiler.mosaic import factory
 from titiler.mosaic.models.responses import Point
-
-from eoapi.raster.models import (
-    Link,
-    MosaicEntity,
-    StacApiQueryRequestBody,
-    StoreException,
-    TooManyResultsException,
-    UnsupportedOperationException,
-    UrisRequestBody,
-)
-from eoapi.raster.settings import MosaicSettings
 
 mosaic_config = MosaicSettings()
 
@@ -77,11 +76,10 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             if await retrieve(mosaic_id):
                 return mk_mosaic_entity(mosaic_id=mosaic_id, self_uri=self_uri)
 
-            else:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    "Error: mosaic with given ID does not exist.",
-                )
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Error: mosaic with given ID does not exist.",
+            )
 
         @self.router.get(
             "/mosaics/{mosaic_id}/mosaicjson",
@@ -100,11 +98,10 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
         ) -> MosaicJSON:
             if m := await retrieve(mosaic_id, include_tiles=True):
                 return m
-            else:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    "Error: mosaic with given ID does not exist.",
-                )
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Error: mosaic with given ID does not exist.",
+            )
 
         @self.router.post(
             "/mosaics",
@@ -202,18 +199,14 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
         async def tilejson(
             request: Request,
             mosaic_id: str = Path(..., description="MosaicId"),
-            tile_format: Optional[ImageType] = Query(
+            tile_format: ImageType | None = Query(
                 None, description="Output image type. Default is auto."
             ),
             tile_scale: int = Query(
                 1, gt=0, lt=4, description="Tile size scale. 1=256x256, 2=512x512..."
             ),
-            minzoom: Optional[int] = Query(
-                None, description="Overwrite default minzoom."
-            ),
-            maxzoom: Optional[int] = Query(
-                None, description="Overwrite default maxzoom."
-            ),
+            minzoom: int | None = Query(None, description="Overwrite default minzoom."),
+            maxzoom: int | None = Query(None, description="Overwrite default maxzoom."),
             layer_params=Depends(self.layer_dependency),
             dataset_params=Depends(self.dataset_dependency),  # noqa
             pixel_selection=Depends(self.pixel_selection_dependency),  # noqa
@@ -263,11 +256,10 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     "tiles": [tiles_url],
                 }
 
-            else:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    "Error: mosaic with given ID does not exist.",
-                )
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Error: mosaic with given ID does not exist.",
+            )
 
         # derived from cogeo-xyz
         @self.router.get(
@@ -314,25 +306,27 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
 
             mosaic_uri = mk_src_path(mosaic_id)
             tms = self.supported_tms.get("WebMercatorQuad")
-            with rasterio.Env(**env):
-                with self.backend(
+            with (
+                rasterio.Env(**env),
+                self.backend(
                     mosaic_uri,
                     tms=tms,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
-                ) as src_dst:
-                    image, assets = src_dst.tile(
-                        x,
-                        y,
-                        z,
-                        pixel_selection=pixel_selection,
-                        tilesize=scale * 256,
-                        threads=threads,
-                        **tile_params.as_dict(),
-                        **layer_params.as_dict(),
-                        **dataset_params.as_dict(),
-                    )
+                ) as src_dst,
+            ):
+                image, assets = src_dst.tile(
+                    x,
+                    y,
+                    z,
+                    pixel_selection=pixel_selection,
+                    tilesize=scale * 256,
+                    threads=threads,
+                    **tile_params.as_dict(),
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
+                )
 
             if post_process:
                 image = post_process(image)
@@ -344,7 +338,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 **render_params.as_dict(),
             )
 
-            headers: Dict[str, str] = {}
+            headers: dict[str, str] = {}
             if OptionalHeader.x_assets in self.optional_headers:
                 headers["X-Assets"] = ",".join(assets)
 
@@ -362,12 +356,8 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             tile_scale: int = Query(
                 1, gt=0, lt=4, description="Tile size scale. 1=256x256, 2=512x512..."
             ),
-            minzoom: Optional[int] = Query(
-                None, description="Overwrite default minzoom."
-            ),
-            maxzoom: Optional[int] = Query(
-                None, description="Overwrite default maxzoom."
-            ),
+            minzoom: int | None = Query(None, description="Overwrite default minzoom."),
+            maxzoom: int | None = Query(None, description="Overwrite default maxzoom."),
             layer_params=Depends(self.layer_dependency),  # noqa
             dataset_params=Depends(self.dataset_dependency),  # noqa
             pixel_selection=Depends(self.pixel_selection_dependency),  # noqa
@@ -412,16 +402,18 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 tiles_url += f"?{urlencode(qs)}"
 
             mosaic_uri = mk_src_path(mosaic_id)
-            with rasterio.Env(**env):
-                with self.backend(
+            with (
+                rasterio.Env(**env),
+                self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
-                ) as src_dst:
-                    bounds = src_dst.bounds
-                    minzoom = minzoom if minzoom is not None else src_dst.minzoom
-                    maxzoom = maxzoom if maxzoom is not None else src_dst.maxzoom
+                ) as src_dst,
+            ):
+                bounds = src_dst.bounds
+                minzoom = minzoom if minzoom is not None else src_dst.minzoom
+                maxzoom = maxzoom if maxzoom is not None else src_dst.maxzoom
 
             tms = morecantile.tms.get("WebMercatorQuad")
 
@@ -477,20 +469,22 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             threads = int(os.getenv("MOSAIC_CONCURRENCY", MAX_THREADS))
 
             mosaic_uri = mk_src_path(mosaic_id)
-            with rasterio.Env(**env):
-                with self.backend(
+            with (
+                rasterio.Env(**env),
+                self.backend(
                     mosaic_uri,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
-                ) as src_dst:
-                    values = src_dst.point(
-                        lon,
-                        lat,
-                        threads=threads,
-                        **layer_params.as_dict(),
-                        **dataset_params.as_dict(),
-                    )
+                ) as src_dst,
+            ):
+                values = src_dst.point(
+                    lon,
+                    lat,
+                    threads=threads,
+                    **layer_params.as_dict(),
+                    **dataset_params.as_dict(),
+                )
 
             return {
                 "coordinates": [lon, lat],
@@ -527,7 +521,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     ),
                     20,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: timeout storing mosaic in datastore",
@@ -543,7 +537,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
 
         async def retrieve(
             mosaic_id: str, include_tiles: bool = False
-        ) -> Optional[MosaicJSON]:
+        ) -> MosaicJSON | None:
             mosaic_uri = mk_src_path(mosaic_id)
 
             try:
@@ -556,7 +550,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     ),
                     20,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: timeout retrieving mosaic from datastore.",
@@ -589,7 +583,7 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     ),
                     20,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: timeout deleting mosaic.",
@@ -617,16 +611,16 @@ def asset_href(feature: dict, asset_name: str) -> str:
     """Get asset url."""
     if href := feature.get("assets", {}).get(asset_name, {}).get("href"):
         return href
-    else:
-        raise Exception(f"Asset with name '{asset_name}' could not be found.")
+    raise Exception(f"Asset with name '{asset_name}' could not be found.")
 
 
 def mk_src_path(mosaic_id: str) -> str:
     """Return Mosaic Path."""
     if mosaic_config.backend == "dynamodb://":
         return f"{mosaic_config.backend}{mosaic_config.host}:{mosaic_id}"
-    else:
-        return f"{mosaic_config.backend}{mosaic_config.host}/{mosaic_id}{mosaic_config.format}"
+    return (
+        f"{mosaic_config.backend}{mosaic_config.host}/{mosaic_id}{mosaic_config.format}"
+    )
 
 
 async def mosaicjson_from_urls(urisrb: UrisRequestBody) -> MosaicJSON:
@@ -652,7 +646,7 @@ async def mosaicjson_from_urls(urisrb: UrisRequestBody) -> MosaicJSON:
             ),
             20,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Error: timeout reading URLs and generating MosaicJSON definition",
@@ -691,7 +685,7 @@ async def mosaicjson_from_stac_api_query(req: StacApiQueryRequestBody) -> Mosaic
                 30,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "Error: timeout executing STAC API search.",
@@ -720,7 +714,7 @@ async def mosaicjson_from_stac_api_query(req: StacApiQueryRequestBody) -> Mosaic
                 60,  # todo: how much time should/can it take?
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "Error: timeout reading a COG asset and generating MosaicJSON definition",
@@ -749,7 +743,7 @@ async def mosaicjson_from_stac_api_query(req: StacApiQueryRequestBody) -> Mosaic
 MAX_ITEMS = 100
 
 
-def execute_stac_search(mosaic_request: StacApiQueryRequestBody) -> List[dict]:
+def execute_stac_search(mosaic_request: StacApiQueryRequestBody) -> list[dict]:
     """Send Search request to the stac-api."""
     try:
         search_result = Client.open(mosaic_request.stac_api_root).search(
@@ -781,8 +775,8 @@ def execute_stac_search(mosaic_request: StacApiQueryRequestBody) -> List[dict]:
 
 # assumes all assets are uniform. get the min and max zoom from the first.
 def extract_mosaicjson_from_features(
-    features: List[dict], asset_name: str
-) -> Optional[MosaicJSON]:
+    features: list[dict], asset_name: str
+) -> MosaicJSON | None:
     """Get COG Min/Max Zoom from STAC items and create a MosaicJSON."""
     if features:
         try:
@@ -815,7 +809,7 @@ def extract_mosaicjson_from_features(
 
 async def populate_mosaicjson(
     request: Request,
-    content_type: Optional[str] = Header(None),
+    content_type: str | None = Header(None),
 ) -> MosaicJSON:
     """Post MosaicJSON dependency."""
     body_json = await request.json()

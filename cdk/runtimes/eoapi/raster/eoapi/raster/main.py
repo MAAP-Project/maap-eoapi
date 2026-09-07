@@ -2,6 +2,7 @@
 Handler for AWS Lambda.
 """
 
+from eoapi.raster.factory import MosaicTilerFactory
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from rio_tiler.io import STACReader
@@ -12,8 +13,6 @@ from titiler.extensions import (
     stacViewerExtension,
 )
 from titiler.pgstac.main import app  # noqa: E402
-
-from eoapi.raster.factory import MosaicTilerFactory
 
 ########################################
 # Include the /cog router

@@ -52,17 +52,17 @@ def build_template(overrides: dict | None = None) -> assertions.Template:
         ],
     )
 
-    props = dict(
-        vpc=vpc,
-        stage="test",
-        type="internal",
-        version="1.0.0",
-        web_acl_arn="arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl",
-        logging_bucket_arn="arn:aws:s3:::test-logging-bucket",
-        pgstac_db_config=BASE_PGSTAC_DB_CONFIG,
-        stac_api_config=StacApiConfig(custom_domain_name="stac-api.example.com"),
-        titiler_pgstac_config=BASE_TITILER_CONFIG,
-    )
+    props = {
+        "vpc": vpc,
+        "stage": "test",
+        "type": "internal",
+        "version": "1.0.0",
+        "web_acl_arn": "arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl",
+        "logging_bucket_arn": "arn:aws:s3:::test-logging-bucket",
+        "pgstac_db_config": BASE_PGSTAC_DB_CONFIG,
+        "stac_api_config": StacApiConfig(custom_domain_name="stac-api.example.com"),
+        "titiler_pgstac_config": BASE_TITILER_CONFIG,
+    }
     props |= overrides or {}
 
     # Mock lambda Code.from_docker_build so tests don't need Docker
@@ -113,7 +113,9 @@ class TestPgStacInfraStacRuntimeWiring:
             "AWS::SecretsManager::Secret",
             {
                 "Properties": {
-                    "Name": "/maap-eoapi/test/public/stac-collection-transaction-basic-auth"
+                    "Name": (
+                        "/maap-eoapi/test/public/stac-collection-transaction-basic-auth"
+                    )
                 }
             },
         )
@@ -134,7 +136,8 @@ class TestPgStacInfraStacRuntimeWiring:
             "AWS::SecretsManager::Secret",
             {
                 "Description": (
-                    "Basic auth secret for MAAP internal STAC collection transactions (test)"
+                    "Basic auth secret for MAAP internal STAC collection "
+                    "transactions (test)"
                 ),
                 "Name": (
                     "/maap-eoapi/test/internal/stac-collection-transaction-basic-auth"
