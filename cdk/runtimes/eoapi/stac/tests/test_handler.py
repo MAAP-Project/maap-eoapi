@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import pytest
 from stac_fastapi.pgstac.config import PostgresSettings
 
 from eoapi.stac import handler
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class FakePool:
@@ -22,7 +26,7 @@ class FakePool:
 
 
 @pytest.fixture(autouse=True)
-def clear_handler_state() -> None:
+def clear_handler_state() -> Generator[None, None, None]:
     """Reset handler globals and app state between tests."""
     original_readpool = getattr(handler.app.state, "readpool", None)
     original_writepool = getattr(handler.app.state, "writepool", None)

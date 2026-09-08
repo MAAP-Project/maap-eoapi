@@ -39,3 +39,26 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]
+
+[tool.ruff.lint]
+select = [
+    "FAST", # fastapi
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "TID",  # flake8-tidy-imports
+    "TC",   # flake8-type-checking
+    "ISC",  # flake8-implicit-str-concat
+    "ICN",  # flake8-import-conventions
+]
+ignore = [
+  "BLE001",  # Blind Exceptions
+  "B008",  # Do not perform function calls in default values
+  "PTH",  # flake8-use-pathlib
+]

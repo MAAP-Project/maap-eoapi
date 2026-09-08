@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import aws_cdk as cdk
 from aws_cdk import aws_iam as iam
 from aws_cdk.aws_ssm import (
@@ -8,7 +10,9 @@ from aws_cdk.aws_ssm import (
     CfnMaintenanceWindowTask,
     StringParameter,
 )
-from constructs import Construct
+
+if TYPE_CHECKING:
+    from constructs import Construct
 
 # Aliases for long nested types
 _TaskInvocationParams = CfnMaintenanceWindowTask.TaskInvocationParametersProperty

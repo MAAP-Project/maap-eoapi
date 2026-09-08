@@ -121,7 +121,10 @@ def build_demo_records(users: tuple[str, ...]) -> list[dict[str, Any]]:
         catalog(
             DEMO_GROUP_ID,
             "MAAP Demo Team",
-            "Shared catalog showing how user collections can also appear in a group view.",
+            (
+                "Shared catalog showing how user collections can also appear in a "
+                "group view."
+            ),
             (DEMO_TEAM_CATALOGS_ID,),
         ),
     ]
@@ -143,8 +146,9 @@ def build_demo_records(users: tuple[str, ...]) -> list[dict[str, Any]]:
                         id=f"{username}-canopy-height-demo",
                         title=f"{username} Canopy Height Demo",
                         description=(
-                            "Synthetic DPS output collection for exploring STAC collection "
-                            "management, per-user catalogs, and scoped catalog browsing."
+                            "Synthetic DPS output collection for exploring "
+                            "STAC collection management, per-user catalogs, "
+                            "and scoped catalog browsing."
                         ),
                         owner=username,
                         parent_ids=(user_catalog_id, DEMO_GROUP_ID),
@@ -156,8 +160,9 @@ def build_demo_records(users: tuple[str, ...]) -> list[dict[str, Any]]:
                         id=f"{username}-biomass-demo",
                         title=f"{username} Biomass Demo",
                         description=(
-                            "Synthetic biomass DPS output collection used as local demo data "
-                            "for transaction-backed collection and catalog workflows."
+                            "Synthetic biomass DPS output collection used as local "
+                            "demo data for transaction-backed collection and "
+                            "catalog workflows."
                         ),
                         owner=username,
                         parent_ids=(user_catalog_id,),
@@ -233,7 +238,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="Delete all existing catalog and collection records before loading demo records.",
+        help=(
+            "Delete all existing catalog and collection records before loading "
+            "demo records."
+        ),
     )
     parser.add_argument(
         "--dry-run",

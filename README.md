@@ -2,11 +2,9 @@
 
 [![Tests Status](https://github.com/MAAP-Project/maap-eoapi/actions/workflows/tests.yml/badge.svg)]((https://github.com/MAAP-Project/maap-eoapi/actions?query=workflow:tests))
 
-
 ## Overview
 
 This repository contains the AWS CDK code (written in Python) used to deploy the MAAP project eoapi infrastructure. It is based on the [eoapi-template example](https://github.com/developmentseed/eoapi-template). For the MAAP use case, we use a subset of the eoapi CDK constructs to define a database, an ingestion API, a STAC API, a raster API (i.e a tiling API) and a pgbouncer instance to manage connections to the database. Here, we deploy all these components into a custom VPC.
-
 
 ## Automated Deployment
 
@@ -82,39 +80,35 @@ For a transaction-enabled internal deployment, verify:
 - authenticated writes succeed
 - item write routes are absent from the contract and return `404` or `405` rather than exposing item transaction behavior
 
+## Networking and accessibility of the database
 
-## Networking and accessibility of the database. 
+Because of security requirements, the networking set up imposes the following constraints :
 
-Because of security requirements, the networking set up imposes the following constraints : 
+- For security reasons, the database is in a _private_ subnet of the VPC. As such, only instances running inside of the same VPC can access the database. This means that, for example, even if a user has the password and her IP is allowed inbound connections to the database, access will _not_ be allowed.
 
-- For security reasons, the database is in a _private_ subnet of the VPC. As such, only instances running inside of the same VPC can access the database. This means that, for example, even if a user has the password and her IP is allowed inbound connections to the database, access will _not_ be allowed. 
+This has three consequences :
 
-This has three consequences : 
-
-1. The APIs that need access to the database (the STAC API, the tiling API, the ingestion API) need to be deployed in that same VPC. 
-2. In addition, because these APIs _also_ sometimes need access to the internet, a NAT gateway must in addition be deployed in that VPC. 
-3. For direct, administrative connections to the database, one _must_ go through an instance placed in the same VPC as the database. 
-
+1. The APIs that need access to the database (the STAC API, the tiling API, the ingestion API) need to be deployed in that same VPC.
+2. In addition, because these APIs _also_ sometimes need access to the internet, a NAT gateway must in addition be deployed in that VPC.
+3. For direct, administrative connections to the database, one _must_ go through an instance placed in the same VPC as the database.
 
 ## Ingestion
 
-The term "ingestion" refers to the process of cataloging data in the STAC catalog associated with this deployment. 
-
+The term "ingestion" refers to the process of cataloging data in the STAC catalog associated with this deployment.
 
 ### Direct ingestion
 
-For a small record ingestion (for example a collection record or just one item), one can directly connect to the database and perform loading. This can be done using the `pypgstac` library. For example, to load an item stored locally in `test_item.json`, with `pypgstac` installed, you can run the following command : 
+For a small record ingestion (for example a collection record or just one item), one can directly connect to the database and perform loading. This can be done using the `pypgstac` library. For example, to load an item stored locally in `test_item.json`, with `pypgstac` installed, you can run the following command :
 
-```
+```shell
 pypgstac load --table items test_item.json
 ```
 
 or for a collection
 
-```
+```shell
 pypgstac load --table collections test_collection.json
 ```
-
 
 ### Indirect ingestion through the ingestion pipeline deployment
 

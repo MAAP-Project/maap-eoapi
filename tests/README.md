@@ -12,10 +12,12 @@ uv run pytest tests/test_pgstac_infra.py
 ```
 
 **Test files:**
+
 - **`test_pgstac_infra.py`** — Tests for the `PgStacInfra` stack, covering STAC API construct
   configuration and collection transaction auth secret handling.
 
 **Test coverage:**
+
 1. Default stack configuration: verifies the STAC API lambda is configured with the custom
    Docker handler and that collection transactions are disabled by default.
 2. Stack-managed transaction secret: when `CollectionTransactionsConfig` is provided without
@@ -40,6 +42,7 @@ uv run --group dev pytest tests/test_stac_ingestion.py
 ```
 
 **Test files:**
+
 - **`test_stac_ingestion.py`** — Validates STAC collection and item ingestion against a live stack.
 - **`conftest.py`** — Shared fixtures (STAC ingestion client, test collection/item payloads).
 - **`ingestion.py`** — Helper client for interacting with the STAC ingestor API.

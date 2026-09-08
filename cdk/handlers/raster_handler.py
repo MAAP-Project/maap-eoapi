@@ -65,11 +65,13 @@ async def startup_event() -> None:
             app.state.path_templates[re.compile(f"^{pattern}$")] = route_path
 
     logger.info(
-        f"FastAPI startup: Route templates built in {time.monotonic() - templates_start:.3f}s"
+        "FastAPI startup: Route templates built in "
+        f"{time.monotonic() - templates_start:.3f}s"
     )
 
     logger.info(
-        f"FastAPI startup: Initialization completed in {time.monotonic() - start_time:.3f}s"
+        "FastAPI startup: Initialization completed in "
+        f"{time.monotonic() - start_time:.3f}s"
     )
 
 
@@ -116,8 +118,7 @@ async def log_request_data(request: Request, call_next):
 
     logger.info(f"Request: {json.dumps(log_data)}")
 
-    response = await call_next(request)
-    return response
+    return await call_next(request)
 
 
 # Run FastAPI startup events during Lambda initialization
@@ -183,7 +184,8 @@ def on_snap_restore():
         connection_start = time.monotonic()
         loop.run_until_complete(connect_to_db(app, settings=pg_settings))
         logger.info(
-            f"SnapStart: Database connection established in {time.monotonic() - connection_start:.3f}s"
+            "SnapStart: Database connection established in "
+            f"{time.monotonic() - connection_start:.3f}s"
         )
 
         _connection_initialized = True
@@ -193,7 +195,8 @@ def on_snap_restore():
         raise
 
     logger.info(
-        f"SnapStart: Restoration processing completed in {time.monotonic() - start_time:.3f}s"
+        "SnapStart: Restoration processing completed in "
+        f"{time.monotonic() - start_time:.3f}s"
     )
     return {"statusCode": 200}
 

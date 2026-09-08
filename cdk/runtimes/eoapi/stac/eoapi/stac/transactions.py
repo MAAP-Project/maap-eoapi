@@ -2,12 +2,9 @@
 
 from collections.abc import Sequence
 
-from fastapi.params import Depends
-
 import attr
 from fastapi import APIRouter, FastAPI
-from starlette.responses import Response
-
+from fastapi.params import Depends
 from stac_fastapi.api.models import JSONResponse
 from stac_fastapi.extensions.transaction import (
     AsyncBaseTransactionsClient,
@@ -15,6 +12,7 @@ from stac_fastapi.extensions.transaction import (
     TransactionExtension,
 )
 from stac_fastapi.types.config import ApiSettings
+from starlette.responses import Response
 
 
 @attr.s

@@ -23,12 +23,46 @@ dev = [
     "pytest>=9.1.1",
     "pystac[validation]>=1.15.1",
     "requests>=2.31",
+    "pre-commit>=4.6.2",
 ]
 
 
 [tool.uv]
 no-build-isolation-package = ["numexpr"]
 
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+
 [tool.ruff]
+line-length = 88
 
 [tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "TID",  # flake8-tidy-imports
+    "TC",   # flake8-type-checking
+    "ISC",  # flake8-implicit-str-concat
+    "ICN",  # flake8-import-conventions
+]
+ignore = [
+  "BLE001",  # Blind Exceptions
+  "PTH",  # flake8-use-pathlib
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.markdownlint-cli2.config]
+MD013 = false
+
+[tool.ruff.lint.isort]
+combine-as-imports = true

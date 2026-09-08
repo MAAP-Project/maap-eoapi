@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from aws_cdk import (
     CfnOutput,
@@ -26,17 +25,17 @@ _CONSTRUCT_DIR = Path(__file__).parent / "DpsStacItemGenerator"
 class DpsStacItemGeneratorProps:
     item_load_topic_arn: str
     role_arn: str
-    vpc: Optional[ec2.IVpc] = None
-    subnet_selection: Optional[ec2.SubnetSelection] = None
-    lambda_runtime: Optional[lambda_.Runtime] = None
-    lambda_timeout_seconds: Optional[int] = None
-    memory_size: Optional[int] = None
-    max_concurrency: Optional[int] = None
-    batch_size: Optional[int] = None
-    environment: Optional[dict[str, str]] = None
-    inbound_topic_arns: Optional[list[str]] = None
-    user_stac_collection_id_registry: Optional[dict[str, list[str]]] = None
-    stage: Optional[str] = None
+    vpc: ec2.IVpc | None = None
+    subnet_selection: ec2.SubnetSelection | None = None
+    lambda_runtime: lambda_.Runtime | None = None
+    lambda_timeout_seconds: int | None = None
+    memory_size: int | None = None
+    max_concurrency: int | None = None
+    batch_size: int | None = None
+    environment: dict[str, str] | None = None
+    inbound_topic_arns: list[str] | None = None
+    user_stac_collection_id_registry: dict[str, list[str]] | None = None
+    stage: str | None = None
 
 
 class DpsStacItemGenerator(Construct):

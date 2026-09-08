@@ -1,10 +1,10 @@
-## eoapi.stac
+# eoapi.stac
 
 MAAP-owned STAC API runtime scaffolding.
 
 This package is the local home for the custom STAC runtime used by MAAP deployments. In this first slice it provides the packaging, Docker build path, and local development wiring needed to iterate on the runtime in-repo.
 
-### Local development
+## Local development
 
 Start the local pgSTAC + STAC + raster stack from the repository root:
 
@@ -35,7 +35,7 @@ The secret form is intended for Lambda deployments. The username/password env-va
 
 The secret must be a JSON object with `username` and `password` string fields.
 
-### Loading local demo data
+## Loading local demo data
 
 From the repository root, load a small catalogs-extension demo into the local pgSTAC database with:
 
@@ -46,7 +46,7 @@ docker compose up -d database
 
 The script uses `pypgstac[psycopg]` to load DPS user/team root catalogs, per-user catalogs for `hrodmn` and `jjfrench`, a shared team catalog, and synthetic DPS-output collections linked into those catalogs. Use `--dry-run` to inspect the records first or `--reset` to delete all existing catalog and collection records before reloading the demo records.
 
-### Running tests
+## Running tests
 
 From this directory, run:
 
@@ -56,7 +56,7 @@ uv run pytest
 
 These tests cover app construction, OpenAPI and conformance output, auth behavior, and the custom Lambda handler lifecycle.
 
-### Environment shape
+## Environment shape
 
 The local STAC service uses the same pgSTAC-style environment variables already used elsewhere in eoapi development:
 
@@ -82,7 +82,7 @@ The local raster service also expects mosaic settings, so the compose file provi
 - `MOSAIC_BACKEND`
 - `MOSAIC_HOST`
 
-### Packaging notes
+## Packaging notes
 
 - `cdk/dockerfiles/Dockerfile.stac` has separate `lambda` and `local` targets.
 - The Docker build context for local and CDK builds is `cdk/`.
@@ -94,7 +94,7 @@ The local raster service also expects mosaic settings, so the compose file provi
 - Catalog write-route auth is attached by a narrow local adapter around the upstream `CatalogsTransactionExtension` because version 0.4.0 does not expose a `route_dependencies` constructor hook.
 - Those dependencies are declared as HTTP Basic auth in OpenAPI, so Swagger UI shows the protected routes with the built-in auth flow instead of relying only on the browser challenge popup.
 
-### Post-deploy smoke checks
+## Post-deploy smoke checks
 
 For a catalogs-enabled deployment, verify:
 

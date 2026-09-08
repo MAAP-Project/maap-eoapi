@@ -1,6 +1,7 @@
 """Application tests for the MAAP STAC runtime."""
 
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +17,7 @@ from eoapi.stac.main import (
 
 
 @pytest.fixture(autouse=True)
-def reload_transaction_auth_settings() -> None:
+def reload_transaction_auth_settings() -> Iterator[None]:
     """Refresh auth settings after env changes in each test."""
     auth.reset_transaction_auth_state()
     yield
@@ -246,7 +247,7 @@ def test_item_transaction_write_methods_are_not_registered(
     path: str,
 ) -> None:
     """Item transaction write methods should stay unregistered."""
-    request_kwargs = {"json": {}} if method != "delete" else {}
+    request_kwargs: dict[str, Any] = {"json": {}} if method != "delete" else {}
     response = getattr(collection_transaction_app, method)(path, **request_kwargs)
 
     assert response.status_code == 405

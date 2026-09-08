@@ -78,7 +78,7 @@ def test_creates_valid_config_with_required_env(required_env: None) -> None:
 
 def test_missing_required_env_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STAGE", raising=False)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         Config()
 
 
