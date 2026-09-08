@@ -8,8 +8,10 @@ def get_secret_dict(secret_name: str):
     """Retrieve secrets from AWS Secrets Manager
 
     Args:
-        secret_name (str): name of aws secrets manager secret containing database connection secrets
-        profile_name (str, optional): optional name of aws profile for use in debugger only
+        secret_name (str):
+            aws secrets manager secret containing database connection secrets
+        profile_name (str, optional):
+            optional name of aws profile for use in debugger only
 
     Returns:
         secrets (dict): decrypted secrets in dict

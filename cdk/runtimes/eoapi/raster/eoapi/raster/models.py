@@ -59,12 +59,8 @@ class StacApiQueryRequestBody(Search):
         datetime validation
         overrides default validation due to issue https://github.com/stac-utils/stac-pydantic/issues/78
         """
-        if "/" in v:
-            values = v.split("/")
-        else:
-            # Single date is interpreted as end date
-            values = ["..", v]
-
+        # Single date is interpreted as end date
+        values = v.split("/") if "/" in v else ["..", v]
         dates = []
         for value in values:
             if value == "..":

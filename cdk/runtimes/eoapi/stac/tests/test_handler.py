@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 import pytest
-from eoapi.stac import handler
 from stac_fastapi.pgstac.config import PostgresSettings
+
+from eoapi.stac import handler
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class FakePool:

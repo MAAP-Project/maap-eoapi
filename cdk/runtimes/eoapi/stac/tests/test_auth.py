@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import pytest
+from fastapi.security import HTTPBasicCredentials
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
 from eoapi.stac import auth
 from eoapi.stac.main import (
     CATALOG_TRANSACTION_EXTENSION,
@@ -13,9 +17,9 @@ from eoapi.stac.main import (
     COLLECTION_TRANSACTION_EXTENSION,
     create_app,
 )
-from fastapi.security import HTTPBasicCredentials
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 @pytest.fixture(autouse=True)

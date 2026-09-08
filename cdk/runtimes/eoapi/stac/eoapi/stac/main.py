@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urljoin
 
 import attr
 from brotli_asgi import BrotliMiddleware
-from eoapi.stac.auth import build_transaction_route_dependencies
-from eoapi.stac.transactions import CollectionTransactionExtension
 from fastapi import APIRouter, FastAPI
-from fastapi.params import Depends
+from fastapi.params import Depends  # noqa: TC002
 from stac_fastapi.api.app import StacApi
 from stac_fastapi.api.middleware import ProxyHeaderMiddleware
 from stac_fastapi.api.models import (
@@ -49,15 +47,20 @@ from stac_fastapi.pgstac.extensions.catalogs.catalogs_client import CatalogsClie
 from stac_fastapi.pgstac.extensions.filter import FiltersClient
 from stac_fastapi.pgstac.transactions import TransactionsClient
 from stac_fastapi.pgstac.types.search import PgstacSearch
-from stac_fastapi.types.extension import ApiExtension
 from stac_fastapi.types.requests import get_base_url
-from stac_fastapi.types.search import APIRequest
 from stac_fastapi_catalogs_extension import (
     CatalogsExtension,
     CatalogsTransactionExtension,
 )
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+
+from eoapi.stac.auth import build_transaction_route_dependencies
+from eoapi.stac.transactions import CollectionTransactionExtension
+
+if TYPE_CHECKING:
+    from stac_fastapi.types.extension import ApiExtension
+    from stac_fastapi.types.search import APIRequest
 
 settings = Settings()
 
@@ -181,7 +184,8 @@ def parse_enabled_extensions(raw_value: str | None) -> set[str]:
     if unknown_extensions:
         joined_unknown_extensions = ", ".join(sorted(unknown_extensions))
         raise ValueError(
-            f"Invalid ENABLED_EXTENSIONS: unsupported extensions: {joined_unknown_extensions}"
+            "Invalid ENABLED_EXTENSIONS: unsupported extensions: "
+            f"{joined_unknown_extensions}"
         )
 
     return enabled_extensions

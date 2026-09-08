@@ -6,15 +6,16 @@ import asyncio
 import logging
 import os
 
+from mangum import Mangum
+from stac_fastapi.pgstac.config import PostgresSettings
+from stac_fastapi.pgstac.db import close_db_connection, connect_to_db
+
 from eoapi.stac.auth import load_secret_dict
 from eoapi.stac.main import (
     COLLECTION_TRANSACTION_EXTENSION,
     app,
     parse_enabled_extensions,
 )
-from mangum import Mangum
-from stac_fastapi.pgstac.config import PostgresSettings
-from stac_fastapi.pgstac.db import close_db_connection, connect_to_db
 
 try:
     from snapshot_restore_py import register_after_restore, register_before_snapshot

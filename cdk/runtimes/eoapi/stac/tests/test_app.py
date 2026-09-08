@@ -1,8 +1,11 @@
 """Application tests for the MAAP STAC runtime."""
 
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
+
 from eoapi.stac import auth
 from eoapi.stac.main import (
     CATALOG_TRANSACTION_EXTENSION,
@@ -11,8 +14,6 @@ from eoapi.stac.main import (
     create_app,
     parse_enabled_extensions,
 )
-from fastapi.testclient import TestClient
-from typing import Any
 
 
 @pytest.fixture(autouse=True)

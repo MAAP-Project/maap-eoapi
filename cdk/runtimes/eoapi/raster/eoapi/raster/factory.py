@@ -15,16 +15,6 @@ from attrs import define
 from cogeo_mosaic.backends import DynamoDBBackend
 from cogeo_mosaic.errors import MosaicError
 from cogeo_mosaic.mosaic import MosaicJSON
-from eoapi.raster.models import (
-    Link,
-    MosaicEntity,
-    StacApiQueryRequestBody,
-    StoreException,
-    TooManyResultsException,
-    UnsupportedOperationException,
-    UrisRequestBody,
-)
-from eoapi.raster.settings import MosaicSettings
 from fastapi import Depends, Header, HTTPException, Path, Query
 from pydantic import Field
 from pystac_client import Client
@@ -40,6 +30,17 @@ from titiler.core.resources.responses import JSONResponse, XMLResponse
 from titiler.mosaic import factory
 from titiler.mosaic.models.responses import Point
 
+from eoapi.raster.models import (
+    Link,
+    MosaicEntity,
+    StacApiQueryRequestBody,
+    StoreException,
+    TooManyResultsException,
+    UnsupportedOperationException,
+    UrisRequestBody,
+)
+from eoapi.raster.settings import MosaicSettings
+
 mosaic_config = MosaicSettings()
 
 
@@ -51,7 +52,9 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
 
     def register_routes(self):  # noqa
         """This Method register routes to the router."""
-        # super().register_routes()  # Register default endpoints from titiler MosaicTilerFactory
+
+        # Register default endpoints from titiler MosaicTilerFactory
+        # super().register_routes()
 
         # Register Custom endpoints
         # with dynamodb backend, the tiles field for this is always empty
@@ -166,18 +169,18 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             try:
                 await store(mosaic_id, mosaicjson, overwrite=False)
 
-            except StoreException:
+            except StoreException as e:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
                     "Error: mosaic with given ID already exists",
-                )
+                ) from e
 
             except Exception as e:
                 logging.error(f"could not save mosaic: {e}")
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: could not save mosaic",
-                )
+                ) from e
 
             self_uri = self.url_for(request, "get_mosaic", mosaic_id=mosaic_id)
             response.headers["Location"] = self_uri
@@ -288,7 +291,10 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             ] = 1,
             format: Annotated[
                 ImageType,
-                "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
+                (
+                    "Default will be automatically defined if the output image "
+                    "needs a mask (png) or not (jpeg)."
+                ),
             ] = None,
             backend_params=Depends(self.backend_dependency),
             reader_params=Depends(self.reader_dependency),
@@ -365,7 +371,12 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                 None,
                 gt=0,
                 title="Tile buffer.",
-                description="Buffer on each side of the given tile. It must be a multiple of `0.5`. Output **tilesize** will be expanded to `tilesize + 2 * tile_buffer` (e.g 0.5 = 257x257, 1.0 = 258x258).",
+                description=(
+                    "Buffer on each side of the given tile. It must be a multiple "
+                    "of `0.5`. Output **tilesize** will be expanded to "
+                    "`tilesize + 2 * tile_buffer` (e.g 0.5 = 257x257, "
+                    "1.0 = 258x258)."
+                ),
             ),
             post_process=Depends(self.process_dependency),  # noqa
             colormap=Depends(self.colormap_dependency),  # noqa
@@ -420,16 +431,17 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
             tileMatrix = []
             for zoom in range(minzoom, maxzoom + 1):  # type: ignore
                 matrix = tms.matrix(zoom)
+                top_left_corner = f"{matrix.pointOfOrigin[0]} {matrix.pointOfOrigin[1]}"
                 tm = f"""
-                        <TileMatrix>
-                            <ows:Identifier>{matrix.id}</ows:Identifier>
-                            <ScaleDenominator>{matrix.scaleDenominator}</ScaleDenominator>
-                            <TopLeftCorner>{matrix.pointOfOrigin[0]} {matrix.pointOfOrigin[1]}</TopLeftCorner>
-                            <TileWidth>{matrix.tileWidth}</TileWidth>
-                            <TileHeight>{matrix.tileHeight}</TileHeight>
-                            <MatrixWidth>{matrix.matrixWidth}</MatrixWidth>
-                            <MatrixHeight>{matrix.matrixHeight}</MatrixHeight>
-                        </TileMatrix>"""
+                <TileMatrix>
+                    <ows:Identifier>{matrix.id}</ows:Identifier>
+                    <ScaleDenominator>{matrix.scaleDenominator}</ScaleDenominator>
+                    <TopLeftCorner>{top_left_corner}</TopLeftCorner>
+                    <TileWidth>{matrix.tileWidth}</TileWidth>
+                    <TileHeight>{matrix.tileHeight}</TileHeight>
+                    <MatrixWidth>{matrix.matrixWidth}</MatrixWidth>
+                    <MatrixHeight>{matrix.matrixHeight}</MatrixHeight>
+                </TileMatrix>"""
                 tileMatrix.append(tm)
 
             return self.templates.TemplateResponse(
@@ -521,11 +533,11 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     ),
                     20,
                 )
-            except TimeoutError:
+            except TimeoutError as e:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: timeout storing mosaic in datastore",
-                )
+                ) from e
 
         def mosaic_write(
             mosaic_uri: str,
@@ -550,11 +562,11 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     ),
                     20,
                 )
-            except TimeoutError:
+            except TimeoutError as e:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: timeout retrieving mosaic from datastore.",
-                )
+                ) from e
             except MosaicError:
                 return None
 
@@ -583,11 +595,11 @@ class MosaicTilerFactory(factory.MosaicTilerFactory):
                     ),
                     20,
                 )
-            except TimeoutError:
+            except TimeoutError as e:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Error: timeout deleting mosaic.",
-                )
+                ) from e
 
             return
 
@@ -646,11 +658,11 @@ async def mosaicjson_from_urls(urisrb: UrisRequestBody) -> MosaicJSON:
             ),
             20,
         )
-    except TimeoutError:
+    except TimeoutError as e:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Error: timeout reading URLs and generating MosaicJSON definition",
-        )
+        ) from e
 
     if mosaicjson is None:
         raise HTTPException(
@@ -685,17 +697,17 @@ async def mosaicjson_from_stac_api_query(req: StacApiQueryRequestBody) -> Mosaic
                 30,
             )
 
-        except TimeoutError:
+        except TimeoutError as e:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "Error: timeout executing STAC API search.",
-            )
+            ) from e
 
         except TooManyResultsException as e:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"Error: too many results from STAC API Search: {e}",
-            )
+            ) from e
 
         if not features:
             raise HTTPException(
@@ -714,11 +726,14 @@ async def mosaicjson_from_stac_api_query(req: StacApiQueryRequestBody) -> Mosaic
                 60,  # todo: how much time should/can it take?
             )
 
-        except TimeoutError:
+        except TimeoutError as e:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "Error: timeout reading a COG asset and generating MosaicJSON definition",
-            )
+                (
+                    "Error: timeout reading a COG asset and generating "
+                    "MosaicJSON definition"
+                ),
+            ) from e
 
         if mosaicjson is None:
             raise HTTPException(
@@ -737,7 +752,7 @@ async def mosaicjson_from_stac_api_query(req: StacApiQueryRequestBody) -> Mosaic
         raise e
 
     except Exception as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Error: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Error: {e}") from e
 
 
 MAX_ITEMS = 100
@@ -761,7 +776,8 @@ def execute_stac_search(mosaic_request: StacApiQueryRequestBody) -> list[dict]:
         matched = search_result.matched()
         if matched > MAX_ITEMS:
             raise TooManyResultsException(
-                f"too many results: {matched} Items matched, but only a maximum of {MAX_ITEMS} are allowed."
+                f"too many results: {matched} Items matched, "
+                f"but only a maximum of {MAX_ITEMS} are allowed."
             )
 
         return search_result.items_as_collection().to_dict()["features"]
@@ -770,7 +786,7 @@ def execute_stac_search(mosaic_request: StacApiQueryRequestBody) -> list[dict]:
         raise e
 
     except Exception as e:
-        raise Exception(f"STAC Search error: {e}")
+        raise Exception(f"STAC Search error: {e}") from e
 
 
 # assumes all assets are uniform. get the min and max zoom from the first.
@@ -790,18 +806,19 @@ def extract_mosaicjson_from_features(
                 accessor=partial(asset_href, asset_name=asset_name),
             )
 
-        # when Item geometry is a MultiPolygon (instead of a Polygon), supermercado raises
+        # when Item geometry is a MultiPolygon (instead of Polygon), supermercado raises
         # handle error "local variable 'x' referenced before assignment"
         # supermercado/burntiles.py ", line 38, in _feature_extrema
         # as this method only handles Polygon, LineString, and Point :grimace:
         # https://github.com/mapbox/supermercado/issues/47
-        except UnboundLocalError:
+        except UnboundLocalError as e:
             raise Exception(
-                "STAC Items likely have MultiPolygon geometry, and only Polygon is supported."
-            )
+                "STAC Items likely have MultiPolygon geometry, and only "
+                "Polygon is supported."
+            ) from e
 
         except Exception as e:
-            raise Exception(f"Error extracting mosaic data from results: {e}")
+            raise Exception(f"Error extracting mosaic data from results: {e}") from e
 
     else:
         return None
