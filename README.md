@@ -34,6 +34,18 @@ asset containing the source `.met.json` file. The generator also overwrites the
 STAC Common Metadata `created` property with the UTC publication time shared by
 all Items generated from that catalog.
 
+To merge legacy tag-specific DPS collections into these tag-free IDs, preview
+then apply the database migration:
+
+```bash
+./scripts/migrate_dps_collection_ids.py --dry-run
+./scripts/migrate_dps_collection_ids.py --apply
+```
+
+It recognizes four-part IDs (`username__algorithm__version__tag`), merges their
+items into the corresponding three-part ID, and refuses to proceed if that
+would create duplicate item IDs.
+
 Collection-only STAC transactions can still be enabled with:
 
 - `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE=basic`
