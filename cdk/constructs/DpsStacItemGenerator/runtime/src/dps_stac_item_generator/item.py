@@ -10,6 +10,7 @@ import obstore
 import pystac
 from obstore.store import from_url
 from pystac import Asset, Link
+from pystac.extensions.maap_dps import MaapDpsExtension
 from pystac.stac_io import DefaultStacIO, StacIO
 from slugify import slugify
 from stac_pydantic.item import Item
@@ -18,10 +19,6 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
-DPS_STAC_EXTENSION = (
-    "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json"
-)
-
 
 class ObstoreStacIO(DefaultStacIO):
     def read_text(self, source: Union[str, Link], *args: Any, **kwargs: Any) -> str:
@@ -168,18 +165,14 @@ def get_stac_items(
         else:
             item.collection_id = deterministic_collection_id
 
-        item.properties.update(
-            {
-                "maap-dps:algorithm_name": job_metadata["algorithm_name"],
-                "maap-dps:algorithm_version": job_metadata["algorithm_version"],
-                "maap-dps:username": job_metadata["username"],
-                "maap-dps:tag": job_metadata["tag"],
-                "created": processing_time,
-            }
-        )
         item.stac_extensions[:] = list(dict.fromkeys(item.stac_extensions))
-        if DPS_STAC_EXTENSION not in item.stac_extensions:
-            item.stac_extensions.append(DPS_STAC_EXTENSION)
+        MaapDpsExtension.ext(item, add_if_missing=True).apply(
+            algorithm_name=job_metadata["algorithm_name"],
+            algorithm_version=job_metadata["algorithm_version"],
+            username=job_metadata["username"],
+            tag=job_metadata["tag"],
+        )
+        item.properties["created"] = processing_time
         item.add_asset(
             "dps-metadata",
             Asset(
