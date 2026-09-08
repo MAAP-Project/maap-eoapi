@@ -10,7 +10,9 @@ WORKDIR /asset
 COPY runtime/pyproject.toml pyproject.toml
 COPY runtime/src/dps_stac_item_generator/ dps_stac_item_generator/
 
-RUN uv export --no-dev --no-editable -o requirements.txt && \
+RUN dnf install -y git && \
+  dnf clean all && \
+  uv export --no-dev --no-editable -o requirements.txt && \
   uv pip install --target /asset -r requirements.txt 
 
 CMD ["dps_stac_item_generator.handler.handler"]
