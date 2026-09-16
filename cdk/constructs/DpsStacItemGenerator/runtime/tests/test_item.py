@@ -225,11 +225,9 @@ class TestGetStacItems:
                     "2023/01/15/10/30/45/123456/.met.json",
                 ),
             ),
+            pytest.raises(ValueError, match="could not identify the DPS output prefix"),
         ):
-            with pytest.raises(
-                ValueError, match="could not identify the DPS output prefix"
-            ):
-                list(get_stac_items(catalog_s3_key))
+            list(get_stac_items(catalog_s3_key))
 
     def test_get_stac_items_missing_met_json(self, mock_catalog):
         """Test handling when met.json file is not found."""
@@ -241,9 +239,9 @@ class TestGetStacItems:
                 return_value=mock_catalog,
             ),
             patch("dps_stac_item_generator.item.load_met_json", return_value=None),
+            pytest.raises(ValueError, match="could not locate the .met.json file"),
         ):
-            with pytest.raises(ValueError, match="could not locate the .met.json file"):
-                list(get_stac_items(catalog_s3_key))
+            list(get_stac_items(catalog_s3_key))
 
     def test_get_stac_items_load_met_json_called_correctly(
         self, mock_catalog, mock_job_metadata
@@ -312,9 +310,9 @@ class TestGetStacItems:
                     "2023/01/15/10/30/45/123456/.met.json",
                 ),
             ),
+            pytest.raises(Exception, match="Failed to load catalog"),
         ):
-            with pytest.raises(Exception, match="Failed to load catalog"):
-                list(get_stac_items(catalog_s3_key))
+            list(get_stac_items(catalog_s3_key))
 
     def test_get_stac_items_generator_behavior(self, mock_catalog, mock_job_metadata):
         """Test that get_stac_items returns a generator and yields items lazily."""
@@ -360,11 +358,11 @@ class TestGetStacItems:
                 "dps_stac_item_generator.item.pystac.Catalog.from_file",
                 side_effect=Exception("Failed to parse catalog.json: invalid format"),
             ),
-        ):
-            with pytest.raises(
+            pytest.raises(
                 Exception, match="Failed to parse catalog.json: invalid format"
-            ):
-                list(get_stac_items(catalog_s3_key))
+            ),
+        ):
+            list(get_stac_items(catalog_s3_key))
 
     def test_santitize_collection_id(self, mock_catalog, mock_job_metadata):
         """Test that collection ID is sanitized correctly."""
@@ -470,7 +468,7 @@ class TestGetStacItems:
     def test_empty_registry_uses_deterministic_id(
         self, mock_catalog, mock_job_metadata
     ):
-        """An empty registry results in the deterministic collection ID for all items."""
+        """Empty registry results in the deterministic collection ID for all items."""
         catalog_s3_key = "s3://test-bucket/2023/01/15/10/30/45/123456/catalog.json"
         expected_collection_id = "superman__awesome-algo__0.1"
 

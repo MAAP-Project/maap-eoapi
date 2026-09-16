@@ -2,8 +2,9 @@ import fnmatch
 import json
 import logging
 import re
+from collections.abc import Generator
 from datetime import datetime, timezone
-from typing import Any, Generator, Optional, Union
+from typing import Any
 from urllib.parse import urlparse
 
 import obstore
@@ -22,7 +23,7 @@ COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
 
 
 class ObstoreStacIO(DefaultStacIO):
-    def read_text(self, source: Union[str, Link], *args: Any, **kwargs: Any) -> str:
+    def read_text(self, source: str | Link, *args: Any, **kwargs: Any) -> str:
         parsed = urlparse(str(source))
         key = parsed.path[1:]
         store = from_url(f"{parsed.scheme}://{parsed.netloc}")
@@ -30,9 +31,7 @@ class ObstoreStacIO(DefaultStacIO):
         obj = obstore.get(store, key)
         return obj.bytes().to_bytes().decode("utf-8")
 
-    def write_text(
-        self, dest: Union[str, Link], txt: str, *args: Any, **kwargs: Any
-    ) -> None:
+    def write_text(self, dest: str | Link, txt: str, *args: Any, **kwargs: Any) -> None:
         parsed = urlparse(str(dest))
         key = parsed.path[1:]
         store = from_url(f"{parsed.scheme}://{parsed.netloc}")
@@ -42,7 +41,7 @@ class ObstoreStacIO(DefaultStacIO):
 StacIO.set_default(ObstoreStacIO)
 
 
-def get_dps_output_prefix(s3_key) -> Optional[str]:
+def get_dps_output_prefix(s3_key) -> str | None:
     """
     Find the S3 key prefix for the outputs associated with a DPS job
 
@@ -84,6 +83,7 @@ def load_met_json(
                     ),
                     met_json_key,
                 )
+    return None
 
 
 def is_authorized(
@@ -140,7 +140,8 @@ def get_stac_items(
     met_json = load_met_json(s3_key_parsed.netloc, job_output_prefix)
     if not met_json:
         raise ValueError(
-            f"could not locate the .met.json file with the DPS job outputs in {job_output_prefix}"
+            "could not locate the .met.json file "
+            f"with the DPS job outputs in {job_output_prefix}"
         )
 
     job_metadata, met_json_key = met_json

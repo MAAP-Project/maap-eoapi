@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Annotated, Any, Dict, List, Optional, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 
 import boto3
 from pydantic import ValidationError
@@ -60,7 +60,7 @@ def get_topic_arn() -> str:
     item_load_topic_arn = os.environ.get("ITEM_LOAD_TOPIC_ARN")
     if not item_load_topic_arn:
         logger.error("Environment variable ITEM_LOAD_TOPIC_ARN is not set.")
-        raise EnvironmentError("ITEM_LOAD_TOPIC_ARN must be set")
+        raise OSError("ITEM_LOAD_TOPIC_ARN must be set")
 
     return item_load_topic_arn
 
@@ -69,10 +69,10 @@ def get_catalog_json_key(message_str: str) -> str:
     """Process an S3 event notification and return STAC item data."""
     try:
         message_data = json.loads(message_str)
-        records: List[Dict[str, Any]] = message_data.get("Records", [])
+        records: list[dict[str, Any]] = message_data.get("Records", [])
         if not records:
             raise ValueError("no S3 event records!")
-        elif len(records) > 1:
+        if len(records) > 1:
             raise ValueError("more than one S3 event record!")
 
         s3_data = records[0]["s3"]
@@ -100,12 +100,12 @@ class BatchItemFailure(TypedDict):
 
 
 class PartialBatchFailureResponse(TypedDict):
-    batchItemFailures: List[BatchItemFailure]
+    batchItemFailures: list[BatchItemFailure]
 
 
 def handler(
-    event: Dict[str, Any], context: Context
-) -> Optional[PartialBatchFailureResponse]:
+    event: dict[str, Any], context: Context
+) -> PartialBatchFailureResponse | None:
     """
     AWS Lambda handler function triggered by SQS with batching enabled.
 
@@ -120,14 +120,14 @@ def handler(
         sns_client = boto3.client("sns", region_name=os.getenv("AWS_DEFAULT_REGION"))
     except Exception as e:
         logging.error(f"Error: {str(e)}")
-        raise EnvironmentError("AWS_DEFAULT_REGION must be set") from e
+        raise OSError("AWS_DEFAULT_REGION must be set") from e
 
     logger.info(f"Received batch with {len(records)} records.")
     logger.debug(
         f"Lambda Context: RequestId={aws_request_id}, RemainingTime={remaining_time}ms"
     )
 
-    batch_item_failures: List[BatchItemFailure] = []
+    batch_item_failures: list[BatchItemFailure] = []
 
     for record in records:
         message_id = record.get("messageId")
@@ -152,14 +152,16 @@ def handler(
 
                 item_load_topic_arn = get_topic_arn()
                 logger.info(
-                    f"[{message_id}] Publishing STAC item {stac_item.id} to {item_load_topic_arn}"
+                    f"[{message_id}] Publishing STAC item {stac_item.id} "
+                    f"to {item_load_topic_arn}"
                 )
                 response = sns_client.publish(
                     TopicArn=item_load_topic_arn,
                     Message=stac_item_json,
                 )
                 logger.info(
-                    f"[{message_id}] SNS publish response MessageId: {response.get('MessageId')}"
+                    f"[{message_id}] SNS publish response MessageId: "
+                    f"{response.get('MessageId')}"
                 )
 
             logger.info(f"[{message_id}] Successfully processed.")
@@ -173,12 +175,11 @@ def handler(
 
     if batch_item_failures:
         logger.warning(
-            f"Finished processing batch. {len(batch_item_failures)} failure(s) reported."
+            "Finished processing batch. "
+            f"{len(batch_item_failures)} failure(s) reported."
         )
-        logger.info(
-            f"Returning failed item identifiers: {[f['itemIdentifier'] for f in batch_item_failures]}"
-        )
+        failed_ids = [f["itemIdentifier"] for f in batch_item_failures]
+        logger.info("Returning failed item identifiers: %s", failed_ids)
         return {"batchItemFailures": batch_item_failures}
-    else:
-        logger.info("Finished processing batch. All records successful.")
-        return None
+    logger.info("Finished processing batch. All records successful.")
+    return None

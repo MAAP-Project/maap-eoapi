@@ -11,19 +11,19 @@ The MAAP project uses a modern, event-driven serverless architecture for STAC (S
 The STAC infrastructure consists of two main components that work together in a pipeline:
 
 1. **\*ItemGenerator** - A process that generates STAC items and posts them to the StacLoader SNS topic
-3. **StacLoader** - Loads STAC objects into the pgstac database
+2. **StacLoader** - Loads STAC objects into the pgstac database
 
 In MAAP, we have two ItemGenerators (one each for the internal and public STACs):
 
 1. **DpsStacItemGenerator** - Listens for catalog.json files uploaded to the DPS output bucket
-2. **StactoolsItemGenerator** - Generates STAC items using stactools packages  
+2. **StactoolsItemGenerator** - Generates STAC items using stactools packages
 
 ### Event-Driven Workflow
 
 All components use SNS + SQS + Lambda for reliable, scalable processing:
 
 - **SNS Topics** serve as event routing hubs
-- **SQS Queues** provide buffering and batching capabilities  
+- **SQS Queues** provide buffering and batching capabilities
 - **Lambda Functions** process events with automatic scaling
 - **Dead Letter Queues** capture failed processing attempts for debugging
 
@@ -72,7 +72,7 @@ Each StactoolsItemGenerator message contains:
 ```json
 {
   "package_name": "stactools-glad-global-forest-change",
-  "group_name": "gladglobalforestchange", 
+  "group_name": "gladglobalforestchange",
   "create_item_args": ["https://example.com/data.tif"],
   "collection_id": "glad-global-forest-change-1.11"
 }
@@ -105,7 +105,7 @@ Loads STAC collections and items into the pgstac PostgreSQL database:
 - Configure S3 bucket notifications to send events to DpsStacItemGenerator topic
 - DPS uploads catalog.json files → automatic STAC item generation → database insertion
 
-### 2. Stactools-based Generation (Manual/Scripted)  
+### 2. Stactools-based Generation (Manual/Scripted)
 
 - Publish ItemRequest messages to StactoolsItemGenerator topic
 - Supports any stactools package for flexible data source handling
@@ -146,7 +146,7 @@ We still have a synchronous STAC Ingstor API that provides similar functionality
 The new infrastructure provides:
 
 - **Better Scalability**: Automatic scaling based on queue depth
-- **Improved Reliability**: Dead letter queues and retry mechanisms  
+- **Improved Reliability**: Dead letter queues and retry mechanisms
 - **Multiple Input Pathways**: S3 events, direct publishing, stactools generation
 - **Decoupled Components**: Each component can be scaled independently
 - **Batch Processing**: More efficient database operations
@@ -183,7 +183,7 @@ sns_client = boto3.client("sns")
 STAC_LOADER_SNS_TOPIC_ARN = "arn:aws:sns:us-west-2:916098889494:MAAP-STAC-..."
 
 response = sns_client.publish(
-    TopicArn=STAC_LOADER_SNS_TOPIC_ARN, 
+    TopicArn=STAC_LOADER_SNS_TOPIC_ARN,
     Message=json.dumps(agb_collection.to_dict())
 )
 ```
@@ -223,20 +223,20 @@ def publish_stactools_messages(messages, batch_size=10):
     """Publish messages in batches to avoid rate limits"""
     for i in range(0, len(messages), batch_size):
         batch = messages[i:i + batch_size]
-        
+
         batch_entries = []
         for j, message in enumerate(batch):
             batch_entries.append({
                 "Id": f"msg-{i + j:04d}",
                 "Message": json.dumps(message)
             })
-        
+
         # Publish batch to SNS
         response = sns_client.publish_batch(
             TopicArn=STACTOOLS_ITEM_GENERATOR_SNS_TOPIC_ARN,
             PublishBatchRequestEntries=batch_entries
         )
-        
+
         print(f"Batch {i//batch_size + 1}: {len(response.get('Successful', []))} successful")
 
 # Publish all item generation requests
@@ -258,4 +258,3 @@ The infrastructure will automatically:
    - Reports any failures to dead letter queue
 
 You will need to monitor the SQS queues (including the DeadLetterQueue) to monitor progress, or you can validate success/failure by querying the STAC API.
-

@@ -1,7 +1,6 @@
 """Models to support mosaicjson endpoints"""
 
 import re
-from typing import List, Optional
 
 from pydantic import BaseModel, field_validator
 from stac_pydantic.api import Search
@@ -21,15 +20,15 @@ class Link(BaseModel):
 
     href: str
     rel: str
-    type: Optional[str]
-    title: Optional[str]
+    type: str | None
+    title: str | None
 
 
 class MosaicEntity(BaseModel):
     """Mosaic Model."""
 
     id: str
-    links: List[Link]
+    links: list[Link]
 
 
 rfc3339_regex_str = (
@@ -43,16 +42,16 @@ class StacApiQueryRequestBody(Search):
     """Common request params for MosaicJSON CRUD operations"""
 
     stac_api_root: str
-    asset_name: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    attribution: Optional[str] = None
-    version: Optional[str] = None
+    asset_name: str | None = None
+    name: str | None = None
+    description: str | None = None
+    attribution: str | None = None
+    version: str | None = None
 
     # override default Search field for collections, which is List[str]
-    collections: Optional[List[str]] = None
+    collections: list[str] | None = None
     # overriding limit so we can tell if it's defined or not
-    limit: Optional[int] = None
+    limit: int | None = None
 
     @field_validator("datetime")
     def validate_datetime(cls, v):
@@ -60,12 +59,8 @@ class StacApiQueryRequestBody(Search):
         datetime validation
         overrides default validation due to issue https://github.com/stac-utils/stac-pydantic/issues/78
         """
-        if "/" in v:
-            values = v.split("/")
-        else:
-            # Single date is interpreted as end date
-            values = ["..", v]
-
+        # Single date is interpreted as end date
+        values = v.split("/") if "/" in v else ["..", v]
         dates = []
         for value in values:
             if value == "..":
@@ -84,13 +79,13 @@ class UrisRequestBody(BaseModel):
     """model for a source body to create a mosaicjson"""
 
     # option 2 - a list of files and min/max zoom
-    urls: List[str]
-    minzoom: Optional[int] = None
-    maxzoom: Optional[int] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    attribution: Optional[str] = None
-    version: Optional[str] = None
+    urls: list[str]
+    minzoom: int | None = None
+    maxzoom: int | None = None
+    name: str | None = None
+    description: str | None = None
+    attribution: str | None = None
+    version: str | None = None
 
 
 class TooManyResultsException(Exception):

@@ -1,9 +1,10 @@
-import requests
 import json
-import pystac
-from pystac import STACValidationError
 import os
+
 import boto3
+import pystac
+import requests
+from pystac import STACValidationError
 
 
 class StacIngestion:
@@ -27,14 +28,14 @@ class StacIngestion:
     def validate_collection(self, collection):
         try:
             pystac.validation.validate_dict(collection)
-        except STACValidationError:
-            raise STACValidationError("Validation failed for the collection")
+        except STACValidationError as e:
+            raise STACValidationError("Validation failed for the collection") from e
 
     def validate_item(self, item):
         try:
             pystac.validation.validate_dict(item)
-        except STACValidationError:
-            raise STACValidationError("Validation failed for the item")
+        except STACValidationError as e:
+            raise STACValidationError("Validation failed for the item") from e
 
     def get_authentication_token(self):
 
@@ -44,12 +45,12 @@ class StacIngestion:
 
         try:
             res_secret = client.get_secret_value(SecretId=secret_id)
-        except client.exceptions.ResourceNotFoundException:
+        except client.exceptions.ResourceNotFoundException as e:
             raise Exception(
                 f"Unable to find a secret for '{secret_id}'. "
-                "\n\nHint: Check your stage and service id. Also, verify that the correct "
-                "AWS_PROFILE is set on your environment."
-            )
+                "\n\nHint: Check your stage and service id. Also, verify that "
+                "the correct AWS_PROFILE is set on your environment."
+            ) from e
 
         # Authentication - Get TOKEN
         secret = json.loads(res_secret["SecretString"])
@@ -66,84 +67,72 @@ class StacIngestion:
             auth=(client_id, client_secret),
             data={
                 "grant_type": "client_credentials",
-                # A space-separated list of scopes to request for the generated access token.
+                # A space-separated list of scopes to request
+                # for the generated access token.
                 "scope": scope,
             },
         )
 
-        token = res_token.json()["access_token"]
-        return token
+        return res_token.json()["access_token"]
 
     def insert_collection(self, token, collection):
         headers = {"Authorization": f"bearer {token}"}
-        response = requests.post(
+        return requests.post(
             self.ingestor_url + self.collections_endpoint,
             json=collection,
             headers=headers,
         )
-        return response
 
     def insert_item(self, token, item):
         headers = {"Authorization": f"bearer {token}"}
-        response = requests.post(
+        return requests.post(
             self.ingestor_url + self.items_endpoint, json=item, headers=headers
         )
-        return response
 
     def query_collection(self, collection_id):
-        response = requests.get(
+        return requests.get(
             self.stac_url + self.collections_endpoint + f"/{collection_id}"
         )
-        return response
 
     def query_items(self, collection_id):
-        response = requests.get(
+        return requests.get(
             self.stac_url + self.collections_endpoint + f"/{collection_id}/items"
         )
-        return response
 
     def register_mosaic(self, search_request):
-        response = requests.post(
-            self.titiler_pgstac_url + "/mosaic/register", json=search_request
+        return requests.post(
+            f"{self.titiler_pgstac_url}/mosaic/register", json=search_request
         )
-        return response
 
     def list_mosaic_assets(self, search_id):
         """list the assets of the first tile"""
-        response = requests.get(
-            self.titiler_pgstac_url + f"/mosaic/{search_id}/tiles/0/0/0/assets"
+        return requests.get(
+            f"{self.titiler_pgstac_url}/mosaic/{search_id}/tiles/0/0/0/assets"
         )
-        return response
 
     def get_test_collection(self):
         with open(
             os.path.join(self.current_file_path, "fixtures", "test_collection.json"),
-            "r",
         ) as f:
-            test_collection = json.load(f)
-        return test_collection
+            return json.load(f)
 
     def get_test_item(self):
         with open(
-            os.path.join(self.current_file_path, "fixtures", "test_item.json"), "r"
+            os.path.join(self.current_file_path, "fixtures", "test_item.json")
         ) as f:
-            test_item = json.load(f)
-        return test_item
+            return json.load(f)
 
     def get_test_titiler_search_request(self):
         with open(
             os.path.join(
                 self.current_file_path, "fixtures", "test_titiler_search_request.json"
             ),
-            "r",
         ) as f:
-            test_titiler_search_request = json.load(f)
-        return test_titiler_search_request
+            return json.load(f)
 
     def delete_collection(self, token, collection_id):
         headers = {"Authorization": f"bearer {token}"}
-        response = requests.delete(
+        return requests.delete(
             self.ingestor_url + self.collections_endpoint + f"/{collection_id}",
             headers=headers,
         )
-        return response

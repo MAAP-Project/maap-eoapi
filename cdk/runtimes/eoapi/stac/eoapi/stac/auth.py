@@ -7,12 +7,13 @@ from functools import lru_cache
 from hmac import compare_digest
 from typing import Annotated, Any
 
-from eoapi.stac.settings import (
-    TransactionAuthSettings,
-)
 from fastapi import HTTPException, Security, status
 from fastapi.params import Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+from eoapi.stac.settings import (
+    TransactionAuthSettings,
+)
 
 _BASIC_AUTH_CHALLENGE_HEADERS = {"WWW-Authenticate": "Basic"}
 basic_auth_scheme = HTTPBasic(

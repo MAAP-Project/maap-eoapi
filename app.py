@@ -65,7 +65,7 @@ user_infrastructure = PgStacInfra(
     titiler_pgstac_config=config.user_titiler_pgstac(),
     add_stactools_item_generator=False,
     **(
-        {"dps_stac_item_gen_config": dps_stac_item_gen_config}
+        {"dps_stac_item_gen_config": dps_stac_item_gen_config}  # type: ignore [arg-type]
         if dps_stac_item_gen_config
         else {}
     ),

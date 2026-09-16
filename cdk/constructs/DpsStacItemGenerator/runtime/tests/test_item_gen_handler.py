@@ -116,7 +116,9 @@ def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
                 "messageAttributes": {},
                 "md5OfBody": f"md5-{i}",
                 "eventSource": "aws:sqs",
-                "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:catalog-events-queue",
+                "eventSourceARN": (
+                    "arn:aws:sqs:us-east-1:123456789012:catalog-events-queue"
+                ),
                 "awsRegion": "us-east-1",
             }
         )
@@ -126,7 +128,9 @@ def create_sqs_event_with_s3_notification(s3_events: list[dict]) -> dict:
 def test_handler_success_single_message(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
-    """Test successful processing of a single valid SQS message with S3 catalog.json event."""
+    """
+    Test successful processing of a single valid SQS message with S3 catalog.json event.
+    """
     caplog.set_level(logging.INFO)
     s3_event_data = {
         "bucket": {"name": "test-catalog-bucket"},
@@ -160,7 +164,10 @@ def test_handler_success_single_message(
 def test_handler_success_multiple_messages(
     mock_context, mock_sns_client, mock_get_stac_items, mocker, caplog
 ):
-    """Test successful processing of multiple valid SQS messages with S3 catalog.json events."""
+    """
+    Test successful processing of multiple valid SQS messages
+    with S3 catalog.json events.
+    """
     s3_event_data1 = {
         "bucket": {"name": "test-catalog-bucket-1"},
         "object": {"key": "path1/catalog.json"},
@@ -253,8 +260,8 @@ def test_handler_partial_failure_get_stac_items(
         f"[{event['Records'][0]['messageId']}] Successfully processed." in caplog.text
     )
     assert (
-        f"[{event['Records'][1]['messageId']}] Failed with error: Failed to generate STAC items from catalog"
-        in caplog.text
+        f"[{event['Records'][1]['messageId']}] "
+        "Failed with error: Failed to generate STAC items from catalog" in caplog.text
     )
     assert "Finished processing batch. 1 failure(s) reported." in caplog.text
 
@@ -267,7 +274,10 @@ def test_handler_partial_failure_json_decode(
         "bucket": {"name": "test-catalog-bucket-ok"},
         "object": {"key": "ok/catalog.json"},
     }
-    invalid_json_body = '{"Message": "{"Records": [{"s3": {"bucket": {"name": "test"}, "object": {"key": "catalog.json"}}]", "Type": "Notification"}'
+    invalid_json_body = (
+        '{"Message": "{"Records": [{"s3": {"bucket": {"name": "test"}, '
+        '"object": {"key": "catalog.json"}}}]", "Type": "Notification"}'
+    )
 
     event = create_sqs_event_with_s3_notification([s3_event_data_ok])
     malformed_record = {
@@ -336,7 +346,8 @@ def test_handler_partial_failure_invalid_s3_key(
     )
 
     assert (
-        f"[{event['Records'][1]['messageId']}] Failed with error: S3 object key does not appear to be a catalog.json: invalid/catalog-not.json"
+        f"[{event['Records'][1]['messageId']}] Failed with error: "
+        "S3 object key does not appear to be a catalog.json: invalid/catalog-not.json"
         in caplog.text
     )
 
@@ -436,7 +447,9 @@ def test_handler_sns_publish_failure(
 def test_handler_multiple_items_from_catalog(
     mock_context, mock_sns_client, mock_get_stac_items, caplog
 ):
-    """Test processing when get_stac_items returns multiple items from a single catalog."""
+    """
+    Test processing when get_stac_items returns multiple items from a single catalog.
+    """
     s3_event_data = {
         "bucket": {"name": "test-catalog-bucket"},
         "object": {"key": "path/catalog.json"},
@@ -545,7 +558,9 @@ def test_handler_missing_s3_fields(
                 "messageAttributes": {},
                 "md5OfBody": "md5-0",
                 "eventSource": "aws:sqs",
-                "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:catalog-events-queue",
+                "eventSourceARN": (
+                    "arn:aws:sqs:us-east-1:123456789012:catalog-events-queue"
+                ),
                 "awsRegion": "us-east-1",
             }
         ]
