@@ -20,6 +20,7 @@ logger.setLevel(logging.INFO)
 
 COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
 
+
 class ObstoreStacIO(DefaultStacIO):
     def read_text(self, source: Union[str, Link], *args: Any, **kwargs: Any) -> str:
         parsed = urlparse(str(source))
@@ -168,7 +169,7 @@ def get_stac_items(
         item.stac_extensions[:] = list(dict.fromkeys(item.stac_extensions))
         MaapDpsExtension.ext(item, add_if_missing=True).apply(
             algorithm_name=job_metadata["algorithm_name"],
-            algorithm_version=job_metadata["algorithm_version"],
+            processing_version=job_metadata["algorithm_version"],
             username=job_metadata["username"],
             tag=job_metadata["tag"],
         )

@@ -118,7 +118,7 @@ requires-dist = [
     { name = "obstore", specifier = ">=0.7.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pystac", extras = ["validation"], specifier = ">=1.15.2" },
-    { name = "pystac-ext-maap-dps", git = "https://github.com/MAAP-Project/maap-dps-stac-extension.git?rev=851bd53cec57775f12199dcea94b5800c3623923" },
+    { name = "pystac-ext-maap-dps", git = "https://github.com/MAAP-Project/maap-dps-stac-extension.git?rev=v0.1.0" },
     { name = "python-slugify", specifier = "==8.0.4" },
     { name = "stac-pydantic", specifier = ">=3.2.0" },
 ]
@@ -529,7 +529,7 @@ wheels = [
 [[package]]
 name = "pystac-ext-maap-dps"
 version = "0.1.0"
-source = { git = "https://github.com/MAAP-Project/maap-dps-stac-extension.git?rev=851bd53cec57775f12199dcea94b5800c3623923#851bd53cec57775f12199dcea94b5800c3623923" }
+source = { git = "https://github.com/MAAP-Project/maap-dps-stac-extension.git?rev=v0.1.0#bd38dc03041c6246abff2d5dce66a9cd200f2674" }
 dependencies = [
     { name = "pystac-core" },
 ]

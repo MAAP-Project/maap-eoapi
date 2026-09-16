@@ -28,7 +28,7 @@ User STAC catalog configuration:
 The DPS item generator assigns unregistered items to collections named
 `{username}__{algorithm_name}__{algorithm_version}`. Authorized user-supplied
 collection IDs are preserved. Generated items include the filterable
-`maap-dps:algorithm_name`, `maap-dps:algorithm_version`, `maap-dps:username`,
+`maap-dps:algorithm_name`, `processing:version`, `maap-dps:username`,
 and `maap-dps:tag` properties, the MAAP DPS STAC extension, and a `dps-metadata`
 asset containing the source `.met.json` file. The generator also overwrites the
 STAC Common Metadata `created` property with the UTC publication time shared by

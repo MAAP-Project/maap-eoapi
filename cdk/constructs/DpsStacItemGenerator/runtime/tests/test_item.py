@@ -174,7 +174,7 @@ class TestGetStacItems:
                 assert item.properties.model_dump() == {
                     "datetime": item.properties.datetime,
                     "maap-dps:algorithm_name": "awesome-algo",
-                    "maap-dps:algorithm_version": "0.1",
+                    "processing:version": "0.1",
                     "maap-dps:username": "superman",
                     "maap-dps:tag": "test",
                     "created": item.properties.created,
@@ -183,6 +183,7 @@ class TestGetStacItems:
                 assert [str(extension) for extension in item.stac_extensions] == [
                     "https://example.com/existing-extension.json",
                     "https://maap-project.github.io/maap-dps-stac-extension/v0.1.0/schema.json",
+                    "https://stac-extensions.github.io/processing/v1.2.0/schema.json",
                 ]
                 assert item.model_dump()["assets"]["dps-metadata"] == {
                     "href": expected_met_json_href,
