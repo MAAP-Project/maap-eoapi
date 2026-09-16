@@ -3,13 +3,15 @@ import json
 import logging
 import re
 from collections.abc import Generator
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
 import obstore
 import pystac
 from obstore.store import from_url
-from pystac import Link
+from pystac import Asset, Link
+from pystac.extensions.maap_dps import MaapDpsExtension
 from pystac.stac_io import DefaultStacIO, StacIO
 from slugify import slugify
 from stac_pydantic.item import Item
@@ -17,7 +19,7 @@ from stac_pydantic.item import Item
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}__{tag}"
+COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
 
 
 class ObstoreStacIO(DefaultStacIO):
@@ -62,18 +64,24 @@ def get_dps_output_prefix(s3_key) -> str | None:
     return None
 
 
-def load_met_json(bucket: str, job_output_prefix: str) -> dict[str, str] | None:
-    """Load the .met.json file that gets uploaded with DPS job outputs"""
+def load_met_json(
+    bucket: str, job_output_prefix: str
+) -> tuple[dict[str, str], str] | None:
+    """Load DPS metadata and return its discovered object key."""
     store = from_url(f"s3://{bucket}/{job_output_prefix}")
     stream = obstore.list(store, chunk_size=10)
     for list_result in stream:
         for result in list_result:
-            if result["path"].endswith("met.json"):
-                return json.loads(
-                    obstore.get(store, result["path"])
-                    .bytes()
-                    .to_bytes()
-                    .decode("utf-8")
+            met_json_key = result["path"]
+            if met_json_key.endswith("met.json"):
+                return (
+                    json.loads(
+                        obstore.get(store, met_json_key)
+                        .bytes()
+                        .to_bytes()
+                        .decode("utf-8")
+                    ),
+                    met_json_key,
                 )
     return None
 
@@ -129,24 +137,26 @@ def get_stac_items(
 
     s3_key_parsed = urlparse(catalog_json_key)
 
-    job_metadata = load_met_json(s3_key_parsed.netloc, job_output_prefix)
-    if not job_metadata:
+    met_json = load_met_json(s3_key_parsed.netloc, job_output_prefix)
+    if not met_json:
         raise ValueError(
             "could not locate the .met.json file "
             f"with the DPS job outputs in {job_output_prefix}"
         )
 
+    job_metadata, met_json_key = met_json
     deterministic_collection_id = slugify(
         COLLECTION_ID_FORMAT.format(**job_metadata), regex_pattern=r"[/\?#%& ]+"
     )
     username = job_metadata.get("username", "")
+    met_json_href = f"s3://{s3_key_parsed.netloc}/{met_json_key.lstrip('/')}"
+    processing_time = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     catalog = pystac.Catalog.from_file(catalog_json_key)
     catalog.make_all_asset_hrefs_absolute()
 
     for item in catalog.get_all_items():
-        item_dict = item.to_dict()
-        item_collection_id = item_dict.get("collection")
+        item_collection_id = item.collection_id
 
         if item_collection_id and is_authorized(username, item_collection_id, registry):
             logger.info(
@@ -155,6 +165,29 @@ def get_stac_items(
                 username,
             )
         else:
-            item_dict["collection"] = deterministic_collection_id
+            item.collection_id = deterministic_collection_id
 
-        yield Item(**item_dict)
+        item.stac_extensions[:] = list(dict.fromkeys(item.stac_extensions))
+        MaapDpsExtension.ext(item, add_if_missing=True).apply(
+            algorithm_name=job_metadata["algorithm_name"],
+            processing_version=job_metadata["algorithm_version"],
+            username=job_metadata["username"],
+            tag=job_metadata["tag"],
+        )
+        item.properties["created"] = processing_time
+        item.add_asset(
+            "dps-metadata",
+            Asset(
+                href=met_json_href,
+                media_type="application/json",
+                roles=["metadata"],
+                title="DPS job metadata",
+            ),
+        )
+        item.links = [
+            link
+            for link in item.links
+            if not (link.rel == "via" and link.href == met_json_href)
+        ]
+
+        yield Item(**item.to_dict())

@@ -9,9 +9,10 @@ requires-python = ">=3.12"
 dependencies = [
     "obstore>=0.7.0",
     "pydantic>=2.11.0",
-    "pystac[validation]>=1.13.0",
     "stac-pydantic>=3.2.0",
     "python-slugify==8.0.4",
+    "pystac-ext-maap-dps",
+    "pystac[validation]>=1.15.2",
 ]
 
 [dependency-groups]
@@ -29,3 +30,6 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 addopts = "-vv --ignore=cdk.out --no-header --tb=native"
 pythonpath = "."
+
+[tool.uv.sources]
+pystac-ext-maap-dps = { git = "https://github.com/MAAP-Project/maap-dps-stac-extension.git", rev = "v0.1.0" }
