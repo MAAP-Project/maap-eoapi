@@ -41,8 +41,11 @@ then apply the database migration:
 ```
 
 It recognizes four-part IDs (`username__algorithm__version__tag`), merges their
-items into the corresponding three-part ID, and refuses to proceed if that
-would create duplicate item IDs.
+items into the corresponding three-part ID, and adds the DPS metadata fields
+from the legacy ID. Collections containing an item-ID collision after merging
+are reported and left unchanged. For a deployed database, follow the
+[RDS connection guide](#connect-to-rds-through-an-ssm-tunnel) below and the
+RDS usage instructions in the migration script's docstring.
 
 Collection-only STAC transactions can still be enabled with:
 
@@ -114,6 +117,130 @@ This has three consequences :
 1. The APIs that need access to the database (the STAC API, the tiling API, the ingestion API) need to be deployed in that same VPC.
 2. In addition, because these APIs _also_ sometimes need access to the internet, a NAT gateway must in addition be deployed in that VPC.
 3. For direct, administrative connections to the database, one _must_ go through an instance placed in the same VPC as the database.
+
+### Connect to RDS through an SSM tunnel
+
+For administrative database access, use the existing PgBouncer EC2 instance
+as an SSM network relay and run your database client locally. Forward to the
+**RDS endpoint**, not the PgBouncer service, to bypass connection pooling. RDS stays
+private, and you do not need to install dependencies on the EC2 instance or
+open inbound ports.
+
+You need the AWS CLI, `jq`, `curl`, and a PostgreSQL client such as `psql`
+on your workstation. Also
+[install the Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html);
+it is a separate installation from the AWS CLI.
+Configure your AWS profile and region first. Your AWS
+identity needs permission to read the stack resources, SSM parameter, and
+database secret (including KMS decryption if applicable), and start sessions
+using `AWS-StartPortForwardingSessionToRemoteHost`. The EC2 instance must be
+SSM-managed with SSM Agent 3.1.1374.0 or later.
+
+#### Find the database secret
+
+Choose the deployment you want to connect to:
+
+| Database | Stack name | SSM parameter type |
+| --- | --- | --- |
+| User STAC (including DPS outputs) | `MAAP-STAC-<stage>-userSTAC` | `internal` |
+| Public STAC | `MAAP-STAC-<stage>-pgSTAC` | `public` |
+
+The examples use userSTAC. Confirm your account and stage, then list the
+secrets belonging to that CDK deployment:
+
+```bash
+aws sts get-caller-identity
+STAGE=test  # change as appropriate
+STACK="MAAP-STAC-${STAGE}-userSTAC"  # userSTAC or pgSTAC
+
+aws cloudformation list-stack-resources \
+  --stack-name "$STACK" \
+  --query 'StackResourceSummaries[?ResourceType==`AWS::SecretsManager::Secret`].[LogicalResourceId,PhysicalResourceId]' \
+  --output table
+```
+
+You can also find these under **CloudFormation → stack → Resources**. 
+
+Select the database secret whose ID contains `pgstacdbbootstrappersecret`, not the
+STAC HTTP basic-auth secret. CloudFormation gives you the secret's identifier; retrieve its value
+from Secrets Manager. In the same terminal:
+
+```bash
+SECRET_ID='<database secret physical ID (not arn) from the table>'
+DB_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "$SECRET_ID" --query SecretString --output text)
+
+export PGHOST=$(jq -er '.host' <<< "$DB_SECRET")
+export PGDATABASE=$(jq -er '.dbname' <<< "$DB_SECRET")
+export PGUSER=$(jq -er '.username' <<< "$DB_SECRET")
+export PGPASSWORD=$(jq -er '.password' <<< "$DB_SECRET")
+unset DB_SECRET
+```
+
+Check that these commands succeed and that `PGHOST` matches the selected RDS
+endpoint. Do not print the secret or run these commands with shell tracing
+(`set -x`) enabled.
+
+#### Start the tunnel
+
+In a second terminal with the same AWS profile and region, retrieve the RDS
+endpoint from the same secret and start the session. Variables set in the first
+terminal are not available in this terminal:
+
+```bash
+STAGE=test  # use the same stage as above
+TYPE=internal  # use public for the pgSTAC stack
+SECRET_ID='<same database secret physical ID from the table>'
+RDS_HOST=$(aws secretsmanager get-secret-value \
+  --secret-id "$SECRET_ID" --query SecretString --output text | jq -er '.host')
+INSTANCE_ID=$(aws ssm get-parameter \
+  --name "/maap-eoapi/$STAGE/$TYPE/pgbouncer-instance-id" \
+  --query Parameter.Value --output text)
+
+aws ssm start-session \
+  --target "$INSTANCE_ID" \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"$RDS_HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}"
+```
+
+Leave this terminal open while you use the database. The EC2 host needs
+network access to RDS on port 5432, as it does for normal PgBouncer traffic.
+
+#### Connect with a local client
+
+Back in the first terminal, download the
+[AWS RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)
+and configure TLS. `PGHOSTADDR` sends the connection through localhost while
+`PGHOST` retains the RDS hostname for certificate verification:
+
+```bash
+curl --fail --show-error --silent \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+  --output /tmp/maap-rds-global-bundle.pem
+
+export PGHOSTADDR=127.0.0.1
+export PGPORT=15432
+export PGSSLMODE=verify-full
+export PGSSLROOTCERT=/tmp/maap-rds-global-bundle.pem
+
+psql -c 'SELECT current_database(), current_user;'
+psql
+```
+
+`psql` and other libpq-based clients, including psycopg, can use these `PG*`
+environment variables. A client's explicit connection string can override
+them; check the tool's connection options before running commands.
+
+Use `\q` to leave `psql`. When finished, clear the connection variables and
+close the SSM session in the second terminal:
+
+```bash
+unset PGPASSWORD PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGSSLMODE PGSSLROOTCERT
+```
+
+Before destructive operations, confirm the target database and ensure you have
+a recoverable backup. For work expected to run for hours, prefer a durable
+in-VPC execution environment over a workstation tunnel.
 
 ## Ingestion
 
