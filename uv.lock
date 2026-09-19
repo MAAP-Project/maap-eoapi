@@ -313,7 +313,7 @@ wheels = [
 
 [[package]]
 name = "eoapi-cdk"
-version = "11.6.4"
+version = "11.7.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aws-cdk-lib" },
@@ -321,9 +321,9 @@ dependencies = [
     { name = "jsii" },
     { name = "publication" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ff/32/4a97680be094c057583ebc20358e7a50abd04d7a28ef85f6ed3a05968c40/eoapi_cdk-11.6.4.tar.gz", hash = "sha256:c9a8e8fe2852b78e9070f8174db80613a84d1d4625e6a0665b8cffbd65e1a1fd", size = 641691, upload-time = "2026-08-07T14:14:10.685Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/76db6042356e0ce498a09f5f4bb8041df79a970f1e56063e261559a0bb34/eoapi_cdk-11.7.1.tar.gz", hash = "sha256:be3cf7a7487a6e47ccde7abe80b3fe8a3db40bf5eee64c11cd38b70f722d60a0", size = 674494, upload-time = "2026-09-19T12:07:25.981Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/17/e0e5ae397f3923e375c006b7433644795b7891902912417d8cd269e03862/eoapi_cdk-11.6.4-py3-none-any.whl", hash = "sha256:ccb5c8dbc8081cb44e215a47af32772367b5279ac812cea67fef287740af372d", size = 640276, upload-time = "2026-08-07T14:14:09.174Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/b0/a9ef40f50699256614112d3318e42144f12d73fe4086a7c85ad42995760a/eoapi_cdk-11.7.1-py3-none-any.whl", hash = "sha256:3d21807c3abc98f57d5445560e1b452dc6f218ea2327ec2a458c95a5cc348559", size = 673008, upload-time = "2026-09-19T12:07:24.347Z" },
 ]
 
 [[package]]
@@ -441,7 +441,7 @@ dev = [
 requires-dist = [
     { name = "aws-cdk-lib", specifier = "==2.220.0" },
     { name = "constructs", specifier = "==10.6.0" },
-    { name = "eoapi-cdk", specifier = ">=11.6.4" },
+    { name = "eoapi-cdk", specifier = ">=11.7.1" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
