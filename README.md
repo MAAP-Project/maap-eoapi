@@ -32,6 +32,36 @@ asset containing the source `.met.json` file. The generator also overwrites the
 STAC Common Metadata `created` property with the UTC publication time shared by
 all Items generated from that catalog.
 
+For each job with generated items, the same SNS stream also receives a plain
+STAC 1.1.0 user Catalog and one Collection. If the input catalog contains one
+source Collection for those generated items, its useful metadata and resolved
+asset links are reused with the deterministic collection ID and the URL-safe
+user catalog ID as its only `parent_ids` value. With no source Collection, the
+Collection uses whole-world, open-ended extents. Multiple source Collections
+for one job fail rather than being merged. Authorized named collections remain
+Item-only.
+
+Repeated upserts overwrite manual curation on generated Catalog and Collection
+records. The deployed loader still has `CREATE_COLLECTIONS_IF_MISSING=TRUE`,
+and pgSTAC is configured to maintain collection extents from ingested Items, so
+a source extent is initial metadata and may be updated asynchronously from
+Items. Named collections are untouched.
+
+To add hierarchy records for historical generated collections, preview this
+conservative, restartable backfill before applying it:
+
+```bash
+uv run --script scripts/backfill_dps_user_catalogs.py --dry-run
+uv run --script scripts/backfill_dps_user_catalogs.py --apply
+```
+
+The backfill uses hydrated item metadata and actual collection IDs. It skips
+named, authorized, mixed, incomplete, and ambiguous collections. Historical
+authorization cannot always be proven when its registry is incomplete, so review
+the dry-run report. Existing Collection metadata is preserved; apply only adds
+the parent relationship and creates a missing user Catalog. It does not rewrite
+or rename Items.
+
 To merge legacy tag-specific DPS collections into these tag-free IDs, preview
 then apply the database migration:
 

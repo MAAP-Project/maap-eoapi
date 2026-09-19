@@ -60,7 +60,7 @@ def catalog(
     """Build a minimal STAC Catalog record compatible with the Catalogs Extension."""
     return {
         "type": "Catalog",
-        "stac_version": "1.0.0",
+        "stac_version": "1.1.0",
         "id": catalog_id,
         "title": title,
         "description": description,
@@ -74,7 +74,7 @@ def collection(config: DemoCollection) -> dict[str, Any]:
     now = utc_now()
     return {
         "type": "Collection",
-        "stac_version": "1.0.0",
+        "stac_version": "1.1.0",
         "id": config.id,
         "title": config.title,
         "description": config.description,
