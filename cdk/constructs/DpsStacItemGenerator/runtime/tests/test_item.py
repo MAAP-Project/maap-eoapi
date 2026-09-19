@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pystac
 import pytest
-from dps_stac_item_generator.item import (
+from dps_stac_item_generator.stac import (
     get_stac_documents,
     get_stac_items,
     is_authorized,
@@ -60,9 +60,9 @@ class TestGetStacItems:
             '{"algorithm_name": "awesome-algo"}'
         )
         with (
-            patch("dps_stac_item_generator.item.from_url", return_value=store),
+            patch("dps_stac_item_generator.stac.from_url", return_value=store),
             patch(
-                "dps_stac_item_generator.item.obstore.list",
+                "dps_stac_item_generator.stac.obstore.list",
                 return_value=[
                     [
                         {"path": "2023/01/15/10/30/45/123456/catalog.json"},
@@ -71,7 +71,7 @@ class TestGetStacItems:
                 ],
             ) as mock_list,
             patch(
-                "dps_stac_item_generator.item.obstore.get",
+                "dps_stac_item_generator.stac.obstore.get",
                 return_value=met_json_object,
             ) as mock_get,
         ):
@@ -158,17 +158,17 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
                 ),
             ),
-            patch("dps_stac_item_generator.item.datetime") as mock_datetime,
+            patch("dps_stac_item_generator.stac.datetime") as mock_datetime,
         ):
             mock_datetime.now.return_value = processing_time
             items = list(get_stac_items(catalog_s3_key))
@@ -222,11 +222,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -242,10 +242,10 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
-            patch("dps_stac_item_generator.item.load_met_json", return_value=None),
+            patch("dps_stac_item_generator.stac.load_met_json", return_value=None),
             pytest.raises(ValueError, match="could not locate the .met.json file"),
         ):
             list(get_stac_items(catalog_s3_key))
@@ -258,11 +258,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -284,11 +284,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=empty_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -307,11 +307,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 side_effect=Exception("Failed to load catalog"),
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -327,11 +327,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -355,14 +355,14 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
                 ),
             ),
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 side_effect=Exception("Failed to parse catalog.json: invalid format"),
             ),
             pytest.raises(
@@ -380,11 +380,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -403,11 +403,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -429,11 +429,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -454,11 +454,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -480,11 +480,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -532,11 +532,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -577,11 +577,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -602,11 +602,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",
@@ -640,11 +640,11 @@ class TestGetStacItems:
 
         with (
             patch(
-                "dps_stac_item_generator.item.pystac.Catalog.from_file",
+                "dps_stac_item_generator.stac.pystac.Catalog.from_file",
                 return_value=mock_catalog,
             ),
             patch(
-                "dps_stac_item_generator.item.load_met_json",
+                "dps_stac_item_generator.stac.load_met_json",
                 return_value=(
                     mock_job_metadata,
                     "2023/01/15/10/30/45/123456/.met.json",

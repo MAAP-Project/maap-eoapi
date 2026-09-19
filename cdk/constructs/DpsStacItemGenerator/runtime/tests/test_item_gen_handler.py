@@ -702,11 +702,11 @@ def test_handler_registry_preserves_authorized_collection_id(
 
     with (
         patch(
-            "dps_stac_item_generator.item.pystac.Catalog.from_file",
+            "dps_stac_item_generator.stac.pystac.Catalog.from_file",
             return_value=mock_catalog,
         ),
         patch(
-            "dps_stac_item_generator.item.load_met_json",
+            "dps_stac_item_generator.stac.load_met_json",
             return_value=(job_metadata, "2023/01/15/10/30/45/123456/.met.json"),
         ),
     ):

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 import boto3
 from pydantic import ValidationError
 
-from dps_stac_item_generator.item import get_stac_documents
+from dps_stac_item_generator.stac import get_stac_documents
 
 if TYPE_CHECKING:
     from aws_lambda_typing.context import Context
