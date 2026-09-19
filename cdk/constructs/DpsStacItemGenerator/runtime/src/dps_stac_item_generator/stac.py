@@ -195,9 +195,9 @@ def get_stac_documents(
     """Yield generated Catalog, Collection, and Item JSON documents.
 
     Authorized named collections yield Items only. Generated collections yield a
-    user Catalog and one Collection before their Items. A source Collection in
-    the input hierarchy is copied with its metadata and fresh generated identity;
-    otherwise a conservative default Collection is used.
+    user Catalog and one Collection before their Items. A single source Collection
+    in the input hierarchy is copied with fresh generated identity; otherwise a
+    conservative default Collection is used.
     """
     registry = collection_id_registry or {}
 
@@ -273,15 +273,11 @@ def get_stac_documents(
             for source_collection in catalog.get_all_collections()
             if source_collection.id in generated_source_collection_ids
         ]
-        if len(generated_source_collection_ids) > 1 or len(source_collections) > 1:
-            source_ids = ", ".join(sorted(generated_source_collection_ids))
-            raise ValueError(
-                "generated items reference multiple source Collections; "
-                f"expected one for this job, found: {source_ids}"
-            )
-
         yield _generated_catalog(username)
-        if source_collections:
+        if (
+            len(generated_source_collection_ids) == 1
+            and len(source_collections) == 1
+        ):
             yield _source_collection(
                 source_collections[0], deterministic_collection_id, user_catalog
             )
