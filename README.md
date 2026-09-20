@@ -104,6 +104,8 @@ The script is standalone and uses an inline `uv` execution header, so it install
 - `DPS Team Catalogs` as a root catalog, containing the shared `maap-demo-team` catalog
 - two synthetic DPS-output collections per user
 
+Open <http://127.0.0.1:8080> to test the user STAC Browser configuration used by the deployment. Its landing page shows only root catalogs; opening a catalog shows its scoped collections.
+
 Useful options:
 
 ```bash
@@ -122,6 +124,16 @@ For a catalogs-enabled deployment, verify:
 - OpenAPI includes read-only catalog routes such as `GET /catalogs`, `GET /catalogs/{catalog_id}`, and catalog-scoped collection/item reads.
 - `GET /` includes `rel="child"` links for listed catalogs so STAC Browser can discover catalog roots.
 - catalog write routes are absent unless `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` is configured.
+
+The deployment includes a public STAC Browser and, when
+`USER_STAC_BROWSER_CUSTOM_DOMAIN_NAME` and `USER_STAC_BROWSER_CERTIFICATE_ARN` are
+set, a separate user-STAC Browser. Set `STAC_BROWSER_REPO_TAG` to `v5.1.0` (or a
+compatible STAC Browser v5 release) for the user browser configuration. On the
+user-STAC Browser landing page, verify that catalog links are shown and the
+landing page's broad `rel="data"` link is not. Open a child catalog and verify
+that its scoped `rel="data"` link still lists collections, then open a
+collection and verify that `rel="items"` lists its items. The customization
+uses the browser path for root detection, not an API landing-page ID.
 
 For a transaction-enabled internal deployment, verify:
 

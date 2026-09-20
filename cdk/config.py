@@ -95,6 +95,8 @@ class Config(BaseSettings):
     stac_browser_repo_tag: str
     stac_browser_custom_domain_name: str
     stac_browser_certificate_arn: str
+    user_stac_browser_custom_domain_name: str | None = None
+    user_stac_browser_certificate_arn: str | None = None
     stac_api_custom_domain_name: str
     pgstac_version: str
     web_acl_arn: str
@@ -186,6 +188,14 @@ class Config(BaseSettings):
             (
                 "user_stac_catalog_transactions_auth_secret_arn",
                 "user_stac_catalog_transactions_auth_mode",
+            ),
+            (
+                "user_stac_browser_custom_domain_name",
+                "user_stac_browser_certificate_arn",
+            ),
+            (
+                "user_stac_browser_certificate_arn",
+                "user_stac_browser_custom_domain_name",
             ),
             (
                 "user_stac_catalog_transactions_auth_mode",
@@ -312,6 +322,17 @@ class Config(BaseSettings):
             repo_tag=self.stac_browser_repo_tag,
             custom_domain_name=self.stac_browser_custom_domain_name,
             certificate_arn=self.stac_browser_certificate_arn,
+        )
+
+    def user_stac_browser(self) -> StacBrowserConfig | None:
+        """Build user-STAC Browser settings when its domain is configured."""
+        if self.user_stac_browser_custom_domain_name is None:
+            return None
+        assert self.user_stac_browser_certificate_arn is not None
+        return StacBrowserConfig(
+            repo_tag=self.stac_browser_repo_tag,
+            custom_domain_name=self.user_stac_browser_custom_domain_name,
+            certificate_arn=self.user_stac_browser_certificate_arn,
         )
 
     def ingestor(self) -> IngestorConfig:

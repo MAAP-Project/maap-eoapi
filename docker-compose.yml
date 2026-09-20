@@ -114,12 +114,15 @@ services:
       - ./.pgdata:/var/lib/postgresql/data
 
   stac-browser:
-    image: ghcr.io/radiantearth/stac-browser:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.stac-browser
+      args:
+        STAC_BROWSER_REPO_TAG: ${STAC_BROWSER_REPO_TAG:-v5.1.0}
     ports:
       - "${MY_DOCKER_IP:-127.0.0.1}:8080:8080"
     environment:
       SB_catalogUrl: "http://${MY_DOCKER_IP:-127.0.0.1}:8081"
-      # SB_apiCatalogPriority: "childs"
     depends_on:
       - stac
 

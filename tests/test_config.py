@@ -99,6 +99,27 @@ def test_optional_env_vars(required_env: None, monkeypatch: pytest.MonkeyPatch) 
     assert config.titiler_pg_stac_api_custom_domain_name == "titiler.example.com"
 
 
+def test_user_stac_browser_config(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(
+        "USER_STAC_BROWSER_CUSTOM_DOMAIN_NAME", "user-stac-browser.example.com"
+    )
+    monkeypatch.setenv(
+        "USER_STAC_BROWSER_CERTIFICATE_ARN",
+        "arn:aws:acm:us-east-1:123456789012:certificate/user-browser",
+    )
+
+    browser = Config().user_stac_browser()
+
+    assert browser is not None
+    assert browser.repo_tag == "latest"
+    assert browser.custom_domain_name == "user-stac-browser.example.com"
+    assert browser.certificate_arn == (
+        "arn:aws:acm:us-east-1:123456789012:certificate/user-browser"
+    )
+
+
 def test_user_stac_collection_transactions_defaults(
     required_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
