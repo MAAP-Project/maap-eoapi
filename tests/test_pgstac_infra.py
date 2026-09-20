@@ -131,7 +131,7 @@ class TestPgStacInfraStacRuntimeWiring:
         assert browser_kwargs["config_file_path"] is None
         assert browser_kwargs["stac_catalog_url"] == "https://stac-api.example.com/"
 
-    def test_stac_browser_config_strips_only_root_data_links(self):
+    def test_stac_browser_config_preserves_v5_defaults_and_strips_root_data_links(self):
         config_url = (
             (Path(__file__).parents[1] / "cdk" / "stac_browser_user_config.js")
             .resolve()
@@ -157,6 +157,10 @@ const catalog = {{
 const getters = {{
   toBrowserPath: (url) => url.endsWith("/") ? "/" : "/catalog"
 }};
+
+if (config.catalogTitle !== "DPS User STAC" || config.catalogUrl !== null) {{
+  throw new Error("v5 configuration");
+}}
 
 config.preprocessSTAC(root, {{}}, getters);
 config.preprocessSTAC(catalog, {{}}, getters);
