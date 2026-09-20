@@ -1,4 +1,3 @@
-import base64
 import fnmatch
 import json
 import logging
@@ -24,9 +23,8 @@ COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
 
 
 def user_catalog_id(username: str) -> str:
-    """Return a stable URL-safe catalog ID for a DPS username."""
-    encoded_username = base64.urlsafe_b64encode(username.encode()).decode().rstrip("=")
-    return f"user-{encoded_username}"
+    """Return a stable, readable catalog ID for a DPS username."""
+    return f"user-{slugify(username, regex_pattern=r'[/\?#%& ]+')}"
 
 
 def generated_collection_id(job_metadata: dict[str, str]) -> str:

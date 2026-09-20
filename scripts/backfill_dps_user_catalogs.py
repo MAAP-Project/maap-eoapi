@@ -35,7 +35,6 @@ Examples::
 from __future__ import annotations
 
 import argparse
-import base64
 import fnmatch
 import json
 import logging
@@ -58,9 +57,8 @@ METADATA_FIELDS = (
 
 
 def user_catalog_id(username: str) -> str:
-    """Return the generator's stable URL-safe catalog ID for a username."""
-    encoded_username = base64.urlsafe_b64encode(username.encode()).decode().rstrip("=")
-    return f"user-{encoded_username}"
+    """Return the generator's stable, readable catalog ID for a username."""
+    return f"user-{slugify(username, regex_pattern=r'[/\?#%& ]+')}"
 
 
 def generated_collection_id(metadata: dict[str, str]) -> str:

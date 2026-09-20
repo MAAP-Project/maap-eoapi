@@ -231,7 +231,7 @@ def test_handler_deduplicates_hierarchy_documents_per_invocation(
     catalog = {
         "type": "Catalog",
         "stac_version": "1.1.0",
-        "id": "user-dXNlcg",
+        "id": "user-user",
         "title": "user DPS Outputs",
         "description": "DPS output collections generated for user.",
         "parent_ids": [],
@@ -248,7 +248,7 @@ def test_handler_deduplicates_hierarchy_documents_per_invocation(
             "spatial": {"bbox": [[-180.0, -90.0, 180.0, 90.0]]},
             "temporal": {"interval": [[None, None]]},
         },
-        "parent_ids": ["user-dXNlc"],
+        "parent_ids": ["user-user"],
         "links": [],
     }
     mock_get_stac_items.return_value = [

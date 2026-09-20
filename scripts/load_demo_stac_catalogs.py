@@ -3,6 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #   "pypgstac[psycopg]>=0.9,<0.10",
+#   "python-slugify==8.0.4",
 # ]
 # ///
 """Load demo STAC catalogs and collections into the local pgSTAC database.
@@ -24,6 +25,7 @@ from typing import Any
 from psycopg.errors import UndefinedFunction, UndefinedTable
 from pypgstac.db import PgstacDB
 from pypgstac.load import Loader, Methods
+from slugify import slugify
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +51,11 @@ class DemoCollection:
 def utc_now() -> str:
     """Return the current UTC time formatted for STAC metadata."""
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def user_catalog_id(username: str) -> str:
+    """Return the generated catalog ID for a demo user."""
+    return f"user-{slugify(username, regex_pattern=r'[/\?#%& ]+')}"
 
 
 def catalog(
@@ -130,10 +137,10 @@ def build_demo_records(users: tuple[str, ...]) -> list[dict[str, Any]]:
     ]
 
     for username in users:
-        user_catalog_id = f"user-{username}"
+        catalog_id = user_catalog_id(username)
         records.append(
             catalog(
-                user_catalog_id,
+                catalog_id,
                 f"{username} DPS Outputs",
                 f"Demo per-user catalog for DPS outputs owned by {username}.",
                 (DEMO_USER_CATALOGS_ID,),
@@ -151,7 +158,7 @@ def build_demo_records(users: tuple[str, ...]) -> list[dict[str, Any]]:
                             "and scoped catalog browsing."
                         ),
                         owner=username,
-                        parent_ids=(user_catalog_id, DEMO_GROUP_ID),
+                        parent_ids=(catalog_id, DEMO_GROUP_ID),
                         keywords=("maap", "dps", "canopy-height", username),
                     )
                 ),
@@ -165,7 +172,7 @@ def build_demo_records(users: tuple[str, ...]) -> list[dict[str, Any]]:
                             "catalog workflows."
                         ),
                         owner=username,
-                        parent_ids=(user_catalog_id,),
+                        parent_ids=(catalog_id,),
                         keywords=("maap", "dps", "biomass", username),
                     )
                 ),

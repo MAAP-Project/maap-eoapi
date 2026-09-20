@@ -83,10 +83,6 @@ def test_backfill_skips_ambiguous_and_authorized_collections():
     assert ("missing", "missing DPS metadata") in skipped
 
 
-def test_user_catalog_id_encodes_slashes_without_collisions():
-    """Catalog IDs remain URL-safe and distinguish lossy slug inputs."""
-    assert backfill.user_catalog_id("a/b") != backfill.user_catalog_id("a-b")
-    assert all(
-        character.isalnum() or character in "-_"
-        for character in backfill.user_catalog_id("a/b")
-    )
+def test_user_catalog_id_uses_collection_slugification_rules():
+    """Backfilled catalog IDs match the generator's readable format."""
+    assert backfill.user_catalog_id("User Name/One") == "user-user-name-one"

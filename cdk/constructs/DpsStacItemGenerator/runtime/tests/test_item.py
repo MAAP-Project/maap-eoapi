@@ -629,13 +629,9 @@ class TestGetStacItems:
         assert all(not isinstance(document, dict) for document in documents)
         assert all(document.collection == generated_id for document in documents)
 
-    def test_user_catalog_id_is_collision_safe_and_url_safe(self):
-        """Distinct usernames produce distinct URL-safe IDs."""
-        first = user_catalog_id("user/name")
-        second = user_catalog_id("user_name")
-        assert first != second
-        assert first == "user-dXNlci9uYW1l"
-        assert all(character.isalnum() or character in "-_" for character in first)
+    def test_user_catalog_id_uses_collection_slugification_rules(self):
+        """Catalog IDs are readable and URL-safe."""
+        assert user_catalog_id("User Name/One") == "user-user-name-one"
 
     def test_empty_registry_uses_deterministic_id(
         self, mock_catalog, mock_job_metadata
