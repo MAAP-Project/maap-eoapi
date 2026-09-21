@@ -11,10 +11,10 @@
 The default is a dry run. Review the report, then rerun with ``--apply``. The
 backfill uses hydrated item metadata and the actual collection ID; it does not
 parse collection IDs to infer ownership. It only handles collections whose
-items agree on one complete DPS metadata tuple and whose ID matches the current
-generator default. Collections authorized by the supplied registry, named
-collections, mixed collections, and incomplete or ambiguous metadata are
-reported and skipped.
+items agree on one complete DPS metadata tuple and whose ID matches either the
+current generator default or its legacy tag-specific format. Collections
+authorized by the supplied registry, named collections, mixed collections, and
+incomplete or ambiguous metadata are reported and skipped.
 
 Historical authorization is not present in every item record. A collection
 that happens to have a generated-looking ID can therefore be indistinguishable
@@ -48,6 +48,7 @@ from slugify import slugify
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATABASE_URL = "postgresql://username:password@127.0.0.1:5439/postgis"
 COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
+LEGACY_COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}__{tag}"
 METADATA_FIELDS = (
     "username",
     "algorithm_name",
@@ -61,9 +62,11 @@ def user_catalog_id(username: str) -> str:
     return f"user-{slugify(username, regex_pattern=r'[/\?#%& ]+')}"
 
 
-def generated_collection_id(metadata: dict[str, str]) -> str:
-    """Return the collection ID used by the existing item generator."""
-    return slugify(COLLECTION_ID_FORMAT.format(**metadata), regex_pattern=r"[/\?#%& ]+")
+def generated_collection_id(
+    metadata: dict[str, str], collection_id_format: str = COLLECTION_ID_FORMAT
+) -> str:
+    """Return a slugified generated collection ID for the supplied format."""
+    return slugify(collection_id_format.format(**metadata), regex_pattern=r"[/\?#%& ]+")
 
 
 def catalog_document(username: str) -> dict[str, Any]:
@@ -160,7 +163,11 @@ def build_plan(
 
         metadata = {field: values[field].pop() for field in METADATA_FIELDS}
         username = metadata["username"]
-        if generated_collection_id(metadata) != collection_id:
+        generated_ids = {
+            generated_collection_id(metadata),
+            generated_collection_id(metadata, LEGACY_COLLECTION_ID_FORMAT),
+        }
+        if collection_id not in generated_ids:
             skipped.append((collection_id, "named or non-generated collection ID"))
             continue
         if is_authorized(username, collection_id, registry):

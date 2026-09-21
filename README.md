@@ -55,8 +55,9 @@ uv run --script scripts/backfill_dps_user_catalogs.py --dry-run
 uv run --script scripts/backfill_dps_user_catalogs.py --apply
 ```
 
-The backfill uses hydrated item metadata and actual collection IDs. It skips
-named, authorized, mixed, incomplete, and ambiguous collections. Historical
+The backfill uses hydrated item metadata and actual collection IDs. It recognizes
+both current three-part and legacy tag-specific four-part generated IDs, and
+skips named, authorized, mixed, incomplete, and ambiguous collections. Historical
 authorization cannot always be proven when its registry is incomplete, so review
 the dry-run report. Existing Collection metadata is preserved; apply only adds
 the parent relationship and creates a missing user Catalog. It does not rewrite
@@ -72,10 +73,10 @@ then apply the database migration:
 
 It recognizes four-part IDs (`username__algorithm__version__tag`), merges their
 items into the corresponding three-part ID, and adds the DPS metadata fields
-from the legacy ID. Collections containing an item-ID collision after merging
-are reported and left unchanged. For a deployed database, follow the
-[RDS connection guide](#connect-to-rds-through-an-ssm-tunnel) below and the
-RDS usage instructions in the migration script's docstring.
+from the legacy ID. Collections containing an item-ID collision retain their
+legacy ID, but their Items still receive those metadata fields. For a deployed
+database, follow the [RDS connection guide](#connect-to-rds-through-an-ssm-tunnel)
+below and the RDS usage instructions in the migration script's docstring.
 
 Collection-only STAC transactions can still be enabled with:
 
@@ -208,7 +209,7 @@ STAC HTTP basic-auth secret. CloudFormation gives you the secret's identifier; r
 from Secrets Manager. In the same terminal:
 
 ```bash
-SECRET_ID='<database secret physical ID (not arn) from the table>'
+SECRET_ID='<database secret arn from the table>'
 DB_SECRET=$(aws secretsmanager get-secret-value \
   --secret-id "$SECRET_ID" --query SecretString --output text)
 

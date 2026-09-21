@@ -7,8 +7,10 @@
 # ///
 """Merge legacy DPS tag collections into tag-free collection IDs.
 
-By default (or with ``--dry-run``) this reports the changes. Pass ``--apply`` to
-make them. The script uses the local compose database by default; use the
+Collections that cannot be merged because of duplicate item IDs retain their
+legacy collection ID, but their Items still receive DPS metadata inferred from
+that ID. By default (or with ``--dry-run``) this reports the changes. Pass
+``--apply`` to make them. The script uses the local compose database by default; use the
 Docker-network URL when running from a container:
 ``postgresql://username:password@database:5432/postgis``.
 
@@ -144,6 +146,48 @@ def conflicting_item_ids(connection: Any, plan: dict[str, list[str]]) -> list[st
         return [f"{row['target_id']}/{row['id']}" for row in cursor.fetchall()]
 
 
+def apply_item_metadata(connection: Any, source_ids: list[str]) -> None:
+    """Add DPS metadata inferred from legacy IDs without moving their items."""
+    if not source_ids:
+        return
+
+    source_parts = [source_id.split("__") for source_id in source_ids]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO pgstac.items_staging_upsert (content)
+            SELECT jsonb_set(
+                jsonb_set(
+                    jsonb_set(
+                        jsonb_set(
+                            pgstac.format_item(items),
+                            '{properties,maap-dps:algorithm_name}',
+                            to_jsonb(mapping.algorithm_name)
+                        ),
+                        '{properties,processing:version}',
+                        to_jsonb(mapping.algorithm_version)
+                    ),
+                    '{properties,maap-dps:username}', to_jsonb(mapping.username)
+                ),
+                '{properties,maap-dps:tag}', to_jsonb(mapping.tag)
+            )
+            FROM pgstac.items
+            JOIN unnest(
+                %s::text[], %s::text[], %s::text[], %s::text[], %s::text[]
+            ) AS mapping(
+                source_id, username, algorithm_name, algorithm_version, tag
+            ) ON items.collection = mapping.source_id
+            """,
+            (
+                source_ids,
+                [parts[0] for parts in source_parts],
+                [parts[1] for parts in source_parts],
+                [parts[2] for parts in source_parts],
+                [parts[3] for parts in source_parts],
+            ),
+        )
+
+
 def apply_migration(connection: Any, plan: dict[str, list[str]]) -> None:
     """Create tag-free collections, move their items, and remove old collections."""
     with connection.cursor() as cursor:
@@ -265,6 +309,8 @@ def main() -> None:
                 if source_ids
             }
 
+        for source_id in skipped_sources:
+            LOGGER.info("%s -> retain collection and add DPS item metadata", source_id)
         for target_id, source_ids in plan.items():
             LOGGER.info("%s -> %s", ", ".join(source_ids), target_id)
 
@@ -275,13 +321,21 @@ def main() -> None:
             )
         if args.dry_run or not args.apply:
             LOGGER.info(
-                "Dry run. Re-run with --apply to migrate %d collection(s).",
+                "Dry run. Re-run with --apply to migrate %d collection(s) and add "
+                "DPS item metadata to %d retained collection(s).",
                 sum(map(len, plan.values())),
+                len(skipped_sources),
             )
             return
 
+        apply_item_metadata(connection, skipped_sources)
         apply_migration(connection, plan)
-        LOGGER.info("Migrated %d collection(s).", sum(map(len, plan.values())))
+        LOGGER.info(
+            "Migrated %d collection(s) and added DPS item metadata to %d retained "
+            "collection(s).",
+            sum(map(len, plan.values())),
+            len(skipped_sources),
+        )
 
 
 if __name__ == "__main__":

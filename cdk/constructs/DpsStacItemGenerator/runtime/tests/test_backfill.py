@@ -47,6 +47,27 @@ def test_backfill_plan_is_dry_run_safe_and_idempotent():
     assert skipped == [(collection_id, "already linked")]
 
 
+def test_backfill_plans_legacy_tag_specific_collection():
+    """The planner links legacy IDs when their tag matches item metadata."""
+    metadata = {
+        "username": "alice",
+        "algorithm_name": "algo",
+        "algorithm_version": "1.0",
+        "tag": "nightly",
+    }
+    collection_id = backfill.generated_collection_id(
+        metadata, backfill.LEGACY_COLLECTION_ID_FORMAT
+    )
+    records = {
+        collection_id: {"type": "Collection", "id": collection_id, "parent_ids": []}
+    }
+
+    plan, skipped = backfill.build_plan([row(collection_id, **metadata)], records, {})
+
+    assert skipped == []
+    assert plan[0]["catalog_id"] == backfill.user_catalog_id("alice")
+
+
 def test_backfill_skips_ambiguous_and_authorized_collections():
     """The planner reports all conservative exclusions instead of guessing."""
     generated_metadata = {
