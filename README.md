@@ -32,6 +32,37 @@ asset containing the source `.met.json` file. The generator also overwrites the
 STAC Common Metadata `created` property with the UTC publication time shared by
 all Items generated from that catalog.
 
+For each job with generated items, the same SNS stream also receives a plain
+STAC 1.1.0 user Catalog and one Collection. If the input catalog contains one
+source Collection for those generated items, its useful metadata and resolved
+asset links are reused with the deterministic collection ID and the URL-safe
+user catalog ID as its only `parent_ids` value. With no source Collection, the
+Collection uses whole-world, open-ended extents. Multiple source Collections
+for one job fail rather than being merged. Authorized named collections remain
+Item-only.
+
+Repeated upserts overwrite manual curation on generated Catalog and Collection
+records. The deployed loader still has `CREATE_COLLECTIONS_IF_MISSING=TRUE`,
+and pgSTAC is configured to maintain collection extents from ingested Items, so
+a source extent is initial metadata and may be updated asynchronously from
+Items. Named collections are untouched.
+
+To add hierarchy records for historical generated collections, preview this
+conservative, restartable backfill before applying it:
+
+```bash
+uv run --script scripts/backfill_dps_user_catalogs.py --dry-run
+uv run --script scripts/backfill_dps_user_catalogs.py --apply
+```
+
+The backfill uses hydrated item metadata and actual collection IDs. It recognizes
+both current three-part and legacy tag-specific four-part generated IDs, and
+skips named, authorized, mixed, incomplete, and ambiguous collections. Historical
+authorization cannot always be proven when its registry is incomplete, so review
+the dry-run report. Existing Collection metadata is preserved; apply only adds
+the parent relationship and creates a missing user Catalog. It does not rewrite
+or rename Items.
+
 To merge legacy tag-specific DPS collections into these tag-free IDs, preview
 then apply the database migration:
 
@@ -42,10 +73,10 @@ then apply the database migration:
 
 It recognizes four-part IDs (`username__algorithm__version__tag`), merges their
 items into the corresponding three-part ID, and adds the DPS metadata fields
-from the legacy ID. Collections containing an item-ID collision after merging
-are reported and left unchanged. For a deployed database, follow the
-[RDS connection guide](#connect-to-rds-through-an-ssm-tunnel) below and the
-RDS usage instructions in the migration script's docstring.
+from the legacy ID. Collections containing an item-ID collision retain their
+legacy ID, but their Items still receive those metadata fields. For a deployed
+database, follow the [RDS connection guide](#connect-to-rds-through-an-ssm-tunnel)
+below and the RDS usage instructions in the migration script's docstring.
 
 Collection-only STAC transactions can still be enabled with:
 
@@ -74,6 +105,8 @@ The script is standalone and uses an inline `uv` execution header, so it install
 - `DPS Team Catalogs` as a root catalog, containing the shared `maap-demo-team` catalog
 - two synthetic DPS-output collections per user
 
+Open <http://127.0.0.1:8080> to test the user STAC Browser configuration used by the deployment. Its landing page shows only root catalogs; opening a catalog shows its scoped collections.
+
 Useful options:
 
 ```bash
@@ -92,6 +125,16 @@ For a catalogs-enabled deployment, verify:
 - OpenAPI includes read-only catalog routes such as `GET /catalogs`, `GET /catalogs/{catalog_id}`, and catalog-scoped collection/item reads.
 - `GET /` includes `rel="child"` links for listed catalogs so STAC Browser can discover catalog roots.
 - catalog write routes are absent unless `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` is configured.
+
+The deployment includes a public STAC Browser and, when
+`USER_STAC_BROWSER_CUSTOM_DOMAIN_NAME` and `USER_STAC_BROWSER_CERTIFICATE_ARN` are
+set, a separate user-STAC Browser. Set `STAC_BROWSER_REPO_TAG` to `v5.1.0` (or a
+compatible STAC Browser v5 release) for the user browser configuration. On the
+user-STAC Browser landing page, verify that catalog links are shown and the
+landing page's broad `rel="data"` link is not. Open a child catalog and verify
+that its scoped `rel="data"` link still lists collections, then open a
+collection and verify that `rel="items"` lists its items. The customization
+uses the browser path for root detection, not an API landing-page ID.
 
 For a transaction-enabled internal deployment, verify:
 
@@ -166,7 +209,7 @@ STAC HTTP basic-auth secret. CloudFormation gives you the secret's identifier; r
 from Secrets Manager. In the same terminal:
 
 ```bash
-SECRET_ID='<database secret physical ID (not arn) from the table>'
+SECRET_ID='<database secret arn from the table>'
 DB_SECRET=$(aws secretsmanager get-secret-value \
   --secret-id "$SECRET_ID" --query SecretString --output text)
 

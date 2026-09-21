@@ -550,7 +550,11 @@ class PgStacInfra(Stack):
                 access_control=s3.BucketAccessControl.PRIVATE,
                 removal_policy=RemovalPolicy.DESTROY,
                 block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-                bucket_name=f"maap-stac-browser-{stage}",
+                bucket_name=(
+                    f"maap-user-stac-browser-{stage}"
+                    if type == "internal"
+                    else f"maap-stac-browser-{stage}"
+                ),
                 enforce_ssl=True,
             )
 
@@ -604,6 +608,12 @@ class PgStacInfra(Stack):
                 bucket_arn=stac_browser_bucket.bucket_arn,
                 stac_catalog_url=stac_catalog_url,
                 github_repo_tag=stac_browser_config.repo_tag,
+                clone_directory=f"./stac-browser-{type}",
+                config_file_path=(
+                    str(_CDK_DIR / "stac_browser_user_config.js")
+                    if type == "internal"
+                    else None
+                ),
                 website_index_document=root_path,
             )
 

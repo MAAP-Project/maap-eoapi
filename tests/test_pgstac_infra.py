@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 import aws_cdk as cdk
@@ -12,6 +15,7 @@ from cdk.config import (
     CollectionTransactionsConfig,
     PgStacDbConfig,
     StacApiConfig,
+    StacBrowserConfig,
     StacCatalogsConfig,
     TitilerPgstacConfig,
 )
@@ -74,6 +78,107 @@ def build_template(overrides: dict | None = None) -> assertions.Template:
 
 
 class TestPgStacInfraStacRuntimeWiring:
+    def test_passes_user_stac_browser_config_without_changing_catalog_url(self):
+        browser_kwargs = {}
+
+        def fake_stac_browser(scope, id, **kwargs):
+            browser_kwargs.update(kwargs)
+
+        with patch("cdk.pgstac_infra.eoapi_cdk.StacBrowser", fake_stac_browser):
+            build_template(
+                {
+                    "type": "internal",
+                    "stac_api_config": StacApiConfig(
+                        custom_domain_name="user-stac-api.example.com"
+                    ),
+                    "stac_browser_config": StacBrowserConfig(
+                        repo_tag="v5.1.0",
+                        custom_domain_name="user-browser.example.com",
+                        certificate_arn=(
+                            "arn:aws:acm:us-east-1:123456789012:certificate/browser"
+                        ),
+                    ),
+                }
+            )
+
+        assert browser_kwargs["stac_catalog_url"] == (
+            "https://user-stac-api.example.com/"
+        )
+        assert browser_kwargs["config_file_path"] == str(
+            Path(__file__).parents[1] / "cdk" / "stac_browser_user_config.js"
+        )
+
+    def test_default_stac_browser_does_not_use_user_config(self):
+        browser_kwargs = {}
+
+        def fake_stac_browser(scope, id, **kwargs):
+            browser_kwargs.update(kwargs)
+
+        with patch("cdk.pgstac_infra.eoapi_cdk.StacBrowser", fake_stac_browser):
+            build_template(
+                {
+                    "type": "public",
+                    "stac_browser_config": StacBrowserConfig(
+                        repo_tag="v5.1.0",
+                        custom_domain_name="browser.example.com",
+                        certificate_arn=(
+                            "arn:aws:acm:us-east-1:123456789012:certificate/browser"
+                        ),
+                    ),
+                }
+            )
+
+        assert browser_kwargs["config_file_path"] is None
+        assert browser_kwargs["stac_catalog_url"] == "https://stac-api.example.com/"
+
+    def test_stac_browser_config_preserves_v5_defaults_and_strips_root_data_links(self):
+        config_url = (
+            (Path(__file__).parents[1] / "cdk" / "stac_browser_user_config.js")
+            .resolve()
+            .as_uri()
+        )
+        script = f"""
+import config from {json.dumps(config_url)};
+
+const root = {{
+  links: [
+    {{ rel: "data", href: "/collections" }},
+    {{ rel: "child", href: "/catalog" }}
+  ],
+  getAbsoluteUrl: () => "https://stac.example.com/"
+}};
+const catalog = {{
+  links: [
+    {{ rel: "data", href: "/catalog/collections" }},
+    {{ rel: "child", href: "/catalog/child" }}
+  ],
+  getAbsoluteUrl: () => "https://stac.example.com/catalog"
+}};
+const getters = {{
+  toBrowserPath: (url) => url.endsWith("/") ? "/" : "/catalog"
+}};
+
+if (config.catalogTitle !== "DPS User STAC" || config.catalogUrl !== null) {{
+  throw new Error("v5 configuration");
+}}
+
+config.preprocessSTAC(root, {{}}, getters);
+config.preprocessSTAC(catalog, {{}}, getters);
+
+if (root.links.length !== 1 || root.links[0].rel !== "child") {{
+  throw new Error("root links");
+}}
+if (catalog.links.length !== 2 || catalog.links[0].rel !== "data") {{
+  throw new Error("catalog links");
+}}
+"""
+        subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
     def test_uses_custom_stac_handler_and_keeps_transactions_disabled_by_default(self):
         template = build_template(
             {

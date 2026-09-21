@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 import boto3
 from pydantic import ValidationError
 
-from dps_stac_item_generator.item import get_stac_items
+from dps_stac_item_generator.stac import get_stac_documents
 
 if TYPE_CHECKING:
     from aws_lambda_typing.context import Context
@@ -128,6 +128,7 @@ def handler(
     )
 
     batch_item_failures: list[BatchItemFailure] = []
+    published_hierarchy_documents: set[tuple[str, str]] = set()
 
     for record in records:
         message_id = record.get("messageId")
@@ -144,21 +145,34 @@ def handler(
             logger.debug(f"[{message_id}] SNS Message content: {message_str}")
 
             catalog_json_key = get_catalog_json_key(message_str)
-            for stac_item in get_stac_items(
+            for stac_document in get_stac_documents(
                 catalog_json_key,
                 collection_id_registry=COLLECTION_ID_REGISTRY,
             ):
-                stac_item_json = stac_item.model_dump_json()
+                if isinstance(stac_document, dict):
+                    document_key = (stac_document["type"], stac_document["id"])
+                    if document_key in published_hierarchy_documents:
+                        continue
+                    stac_document_json = json.dumps(stac_document)
+                    document_description = (
+                        f"STAC {stac_document['type'].lower()} {stac_document['id']}"
+                    )
+                else:
+                    document_key = None
+                    stac_document_json = stac_document.model_dump_json()
+                    document_description = f"STAC item {stac_document.id}"
 
                 item_load_topic_arn = get_topic_arn()
                 logger.info(
-                    f"[{message_id}] Publishing STAC item {stac_item.id} "
+                    f"[{message_id}] Publishing {document_description} "
                     f"to {item_load_topic_arn}"
                 )
                 response = sns_client.publish(
                     TopicArn=item_load_topic_arn,
-                    Message=stac_item_json,
+                    Message=stac_document_json,
                 )
+                if document_key is not None:
+                    published_hierarchy_documents.add(document_key)
                 logger.info(
                     f"[{message_id}] SNS publish response MessageId: "
                     f"{response.get('MessageId')}"
