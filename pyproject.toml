@@ -3,8 +3,8 @@ name = "maap-eoapi"
 version = "0.0"
 requires-python = ">=3.12"
 dependencies = [
-    "aws-cdk-lib==2.224.0",
-    "constructs==10.6.0",
+    "aws-cdk-lib==2.266.0",
+    "constructs==10.8.1",
     "eoapi-cdk>=11.7.1",
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
@@ -21,7 +21,7 @@ dev = [
     "aws-lambda-typing>=2.20.0",
     "boto3>=1.43.42",
     "pytest>=9.1.1",
-    "pystac[validation]>=1.15.1",
+    "pystac[validation]>=1.15.2",
     "requests>=2.31",
     "pre-commit>=4.6.2",
 ]
