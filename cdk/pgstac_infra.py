@@ -608,6 +608,7 @@ class PgStacInfra(Stack):
                 bucket_arn=stac_browser_bucket.bucket_arn,
                 stac_catalog_url=stac_catalog_url,
                 github_repo_tag=stac_browser_config.repo_tag,
+                clone_directory=f"./stac-browser-{type}",
                 config_file_path=(
                     str(_CDK_DIR / "stac_browser_user_config.js")
                     if type == "internal"

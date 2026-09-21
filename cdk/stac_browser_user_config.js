@@ -1,6 +1,6 @@
 export default {
   catalogUrl: null,
-  catalogTitle: "DPS User STAC",
+  catalogTitle: "MAAP DPS User STAC",
   catalogTitleAfterImage: null,
   catalogImage: null,
   allowExternalAccess: true,
