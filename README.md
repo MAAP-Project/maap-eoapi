@@ -56,8 +56,9 @@ uv run --script scripts/backfill_dps_user_catalogs.py --apply
 ```
 
 The backfill uses hydrated item metadata and actual collection IDs. It recognizes
-both current three-part and legacy tag-specific four-part generated IDs, and
-skips named, authorized, mixed, incomplete, and ambiguous collections. Historical
+both current three-part and legacy tag-specific four-part generated IDs, whether
+raw or slugified. Item tags may vary within a collection; username, algorithm
+name, and version must agree. It skips named, authorized, mixed, incomplete, and ambiguous collections. Historical
 authorization cannot always be proven when its registry is incomplete, so review
 the dry-run report. Existing Collection metadata is preserved; apply only adds
 the parent relationship and creates a missing user Catalog. It does not rewrite
@@ -68,7 +69,7 @@ then apply the database migration:
 
 ```bash
 ./scripts/migrate_dps_collection_ids.py --dry-run
-./scripts/migrate_dps_collection_ids.py --apply
+./scripts/migrate_dps_collection_ids.py --apply  # default: --batch-size 100
 ```
 
 It recognizes four-part IDs (`username__algorithm__version__tag`), merges their
@@ -77,6 +78,101 @@ from the legacy ID. Collections containing an item-ID collision retain their
 legacy ID, but their Items still receive those metadata fields. For a deployed
 database, follow the [RDS connection guide](#connect-to-rds-through-an-ssm-tunnel)
 below and the RDS usage instructions in the migration script's docstring.
+
+Conflict checks run one destination collection at a time rather than grouping
+all migrating items together. Apply uses 100 source collections per transaction
+by default; this default is not production-validated. Set `--batch-size` to a
+positive integer after reviewing the dry-run plan. Destination groups are split
+across batches as needed: the first chunk creates the destination collection
+and later chunks append to it. The cap bounds source-collection count, not item
+count or partition size. Retained collision sources that only receive metadata
+are bounded by the same batching.
+
+Each transaction uses `work_mem=4MB`, `hash_mem_multiplier=1`, and disables
+parallel query workers and JIT. These are per-operation budgets, not a total
+memory limit; large groups can still need substantial temporary disk space and
+time. Apply first materializes transformed items into temporary tables, then
+inserts them into pgSTAC staging in a separate statement so partition-
+maintenance triggers do not conflict with active reads. Completed batches remain
+committed if a later batch fails; rerun `--apply` after fixing the failure to
+finish remaining work. A failed current batch rolls back as one unit, including
+source deletion and copying.
+
+Apply disables pgSTAC queueing only within each batch transaction: maintenance
+runs before source partitions are deleted, avoiding queued references to deleted
+partitions. Drain existing pgSTAC queued work before applying; the script does
+not drain it or change the deployment-wide queue setting. Verify collection and
+item counts and queued work after applying, then restore writers. After an RDS
+out-of-memory restart, resolve any startup parameter errors and confirm the
+instance is healthy before retrying, then monitor memory and storage.
+
+The migration is not safe with concurrent pgSTAC writes. Before `--apply`,
+pause DPS generation, wait for its active invocations to finish, let the STAC
+loader drain, and then pause the loader. The loader is the database writer;
+disabling the DPS generator alone is not sufficient. Stop any other direct
+pgSTAC writers as well.
+
+The generator's queued messages remain in SQS while its mapping is disabled.
+Pause its SQS-to-Lambda mapping:
+
+```bash
+STAGE=dev  # change as appropriate
+FUNCTION_NAME=$(aws cloudformation list-exports \
+  --query "Exports[?Name=='dps-stac-item-generator-function-name-${STAGE}'].Value | [0]" \
+  --output text)
+GENERATOR_QUEUE_URL=$(aws cloudformation list-exports \
+  --query "Exports[?Name=='dps-stac-item-generator-queue-url-${STAGE}'].Value | [0]" \
+  --output text)
+GENERATOR_MAPPING_UUID=$(aws lambda list-event-source-mappings \
+  --function-name "$FUNCTION_NAME" \
+  --query 'EventSourceMappings[0].UUID' \
+  --output text)
+
+aws lambda update-event-source-mapping \
+  --uuid "$GENERATOR_MAPPING_UUID" --no-enabled
+aws lambda get-event-source-mapping --uuid "$GENERATOR_MAPPING_UUID" \
+  --query '{State:State,StateTransitionReason:StateTransitionReason}' \
+  --output table
+```
+
+Continue only after the mapping state is `Disabled` and the generator queue has
+no in-flight messages:
+
+```bash
+aws sqs get-queue-attributes --queue-url "$GENERATOR_QUEUE_URL" \
+  --attribute-names ApproximateNumberOfMessagesNotVisible \
+  --query 'Attributes.ApproximateNumberOfMessagesNotVisible' --output text
+```
+
+Let the loader finish its visible and in-flight messages. Find its Lambda
+function in the deployed stack, set `LOADER_FUNCTION_NAME` to the physical ID
+of the `stac-item-loader` Lambda, then disable its mapping:
+
+```bash
+STACK="MAAP-STAC-${STAGE}-userSTAC"
+aws cloudformation list-stack-resources --stack-name "$STACK" \
+  --query 'StackResourceSummaries[?ResourceType==`AWS::Lambda::Function`].[LogicalResourceId,PhysicalResourceId]' \
+  --output table
+
+LOADER_FUNCTION_NAME='<stac-item-loader physical ID from the table>'
+LOADER_MAPPING_UUID=$(aws lambda list-event-source-mappings \
+  --function-name "$LOADER_FUNCTION_NAME" \
+  --query 'EventSourceMappings[0].UUID' \
+  --output text)
+
+aws lambda update-event-source-mapping --uuid "$LOADER_MAPPING_UUID" --no-enabled
+aws lambda get-event-source-mapping --uuid "$LOADER_MAPPING_UUID" \
+  --query '{State:State,StateTransitionReason:StateTransitionReason}' \
+  --output table
+```
+
+Run the migration only after the loader mapping state is `Disabled`. After the
+migration and its verification, restore the loader first, then DPS generation:
+
+```bash
+aws lambda update-event-source-mapping --uuid "$LOADER_MAPPING_UUID" --enabled
+aws lambda update-event-source-mapping --uuid "$GENERATOR_MAPPING_UUID" --enabled
+```
 
 Collection-only STAC transactions can still be enabled with:
 
@@ -193,7 +289,7 @@ secrets belonging to that CDK deployment:
 
 ```bash
 aws sts get-caller-identity
-STAGE=test  # change as appropriate
+STAGE=dev  # change as appropriate
 STACK="MAAP-STAC-${STAGE}-userSTAC"  # userSTAC or pgSTAC
 
 aws cloudformation list-stack-resources \
@@ -202,7 +298,7 @@ aws cloudformation list-stack-resources \
   --output table
 ```
 
-You can also find these under **CloudFormation → stack → Resources**. 
+You can also find these under **CloudFormation → stack → Resources**.
 
 Select the database secret whose ID contains `pgstacdbbootstrappersecret`, not the
 STAC HTTP basic-auth secret. CloudFormation gives you the secret's identifier; retrieve its value
@@ -231,7 +327,7 @@ endpoint from the same secret and start the session. Variables set in the first
 terminal are not available in this terminal:
 
 ```bash
-STAGE=test  # use the same stage as above
+STAGE=dev  # use the same stage as above
 TYPE=internal  # use public for the pgSTAC stack
 SECRET_ID='<same database secret physical ID from the table>'
 RDS_HOST=$(aws secretsmanager get-secret-value \
@@ -243,11 +339,17 @@ INSTANCE_ID=$(aws ssm get-parameter \
 aws ssm start-session \
   --target "$INSTANCE_ID" \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters "{\"host\":[\"$RDS_HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}"
+  --parameters "{\"host\":[\"$RDS_HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}" \
+  --cli-read-timeout 0
 ```
 
 Leave this terminal open while you use the database. The EC2 host needs
 network access to RDS on port 5432, as it does for normal PgBouncer traffic.
+Session Manager applies the account's idle and maximum-session-duration
+preferences. Database traffic normally avoids the idle timeout, but the maximum
+duration or a network interruption can still close the tunnel. For the batched
+migration, the in-progress transaction rolls back while earlier batches remain
+committed; restart the tunnel and rerun `--apply`.
 
 #### Connect with a local client
 
