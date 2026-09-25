@@ -11,10 +11,12 @@
 The default is a dry run. Review the report, then rerun with ``--apply``. The
 backfill uses hydrated item metadata and the actual collection ID; it does not
 parse collection IDs to infer ownership. It only handles collections whose
-items agree on one complete DPS metadata tuple and whose ID matches either the
-current generator default or its legacy tag-specific format. Collections
-authorized by the supplied registry, named collections, mixed collections, and
-incomplete or ambiguous metadata are reported and skipped.
+items agree on the DPS ownership metadata (username, algorithm name, and
+version) and whose ID matches either the current generator default or its
+legacy tag-specific format, in raw or slugified form. Item tags are ignored:
+they may vary within a collection. Collections authorized by the supplied
+registry, named collections, mixed collections, and incomplete or ambiguous
+metadata are reported and skipped.
 
 Historical authorization is not present in every item record. A collection
 that happens to have a generated-looking ID can therefore be indistinguishable
@@ -49,11 +51,10 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_DATABASE_URL = "postgresql://username:password@127.0.0.1:5439/postgis"
 COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}"
 LEGACY_COLLECTION_ID_FORMAT = "{username}__{algorithm_name}__{algorithm_version}__{tag}"
-METADATA_FIELDS = (
+OWNERSHIP_METADATA_FIELDS = (
     "username",
     "algorithm_name",
     "algorithm_version",
-    "tag",
 )
 
 
@@ -118,8 +119,7 @@ def collection_rows(connection: Any) -> list[dict[str, Any]]:
                 pgstac.format_item(items)->'properties'->>'maap-dps:algorithm_name'
                     AS algorithm_name,
                 pgstac.format_item(items)->'properties'->>'processing:version'
-                    AS algorithm_version,
-                pgstac.format_item(items)->'properties'->>'maap-dps:tag' AS tag
+                    AS algorithm_version
             FROM pgstac.collections AS collections
             JOIN pgstac.items AS items
               ON items.collection = collections.id
@@ -152,22 +152,25 @@ def build_plan(
     for collection_id, item_rows in grouped.items():
         values = {
             field: {row.get(field) for row in item_rows if row.get(field)}
-            for field in METADATA_FIELDS
+            for field in OWNERSHIP_METADATA_FIELDS
         }
-        if any(not values[field] for field in METADATA_FIELDS):
+        if any(not values[field] for field in OWNERSHIP_METADATA_FIELDS):
             skipped.append((collection_id, "missing DPS metadata"))
             continue
-        if any(len(values[field]) != 1 for field in METADATA_FIELDS):
+        if any(len(values[field]) != 1 for field in OWNERSHIP_METADATA_FIELDS):
             skipped.append((collection_id, "mixed DPS metadata"))
             continue
 
-        metadata = {field: values[field].pop() for field in METADATA_FIELDS}
+        metadata = {field: values[field].pop() for field in OWNERSHIP_METADATA_FIELDS}
         username = metadata["username"]
         generated_ids = {
+            COLLECTION_ID_FORMAT.format(**metadata),
             generated_collection_id(metadata),
-            generated_collection_id(metadata, LEGACY_COLLECTION_ID_FORMAT),
         }
-        if collection_id not in generated_ids:
+        legacy_id, separator, legacy_tag = collection_id.rpartition("__")
+        if collection_id not in generated_ids and (
+            not separator or not legacy_tag or legacy_id not in generated_ids
+        ):
             skipped.append((collection_id, "named or non-generated collection ID"))
             continue
         if is_authorized(username, collection_id, registry):

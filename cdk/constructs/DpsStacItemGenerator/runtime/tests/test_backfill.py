@@ -48,7 +48,7 @@ def test_backfill_plan_is_dry_run_safe_and_idempotent():
 
 
 def test_backfill_plans_legacy_tag_specific_collection():
-    """The planner links legacy IDs when their tag matches item metadata."""
+    """The planner links legacy IDs without assessing item tags."""
     metadata = {
         "username": "alice",
         "algorithm_name": "algo",
@@ -63,6 +63,50 @@ def test_backfill_plans_legacy_tag_specific_collection():
     }
 
     plan, skipped = backfill.build_plan([row(collection_id, **metadata)], records, {})
+
+    assert skipped == []
+    assert plan[0]["catalog_id"] == backfill.user_catalog_id("alice")
+
+
+def test_backfill_allows_unslugified_collection_ids():
+    """Ownership metadata can match a raw, mixed-case generated ID."""
+    metadata = {
+        "username": "Alice",
+        "algorithm_name": "My Algorithm",
+        "algorithm_version": "1.0",
+    }
+    collection_id = backfill.COLLECTION_ID_FORMAT.format(**metadata)
+    records = {
+        collection_id: {"type": "Collection", "id": collection_id, "parent_ids": []}
+    }
+
+    plan, skipped = backfill.build_plan([row(collection_id, **metadata)], records, {})
+
+    assert skipped == []
+    assert plan[0]["catalog_id"] == backfill.user_catalog_id("Alice")
+
+
+def test_backfill_ignores_mixed_and_missing_tags():
+    """Tags do not affect ownership of a current generated collection."""
+    metadata = {
+        "username": "alice",
+        "algorithm_name": "algo",
+        "algorithm_version": "1.0",
+    }
+    collection_id = backfill.generated_collection_id(metadata)
+    records = {
+        collection_id: {"type": "Collection", "id": collection_id, "parent_ids": []}
+    }
+
+    plan, skipped = backfill.build_plan(
+        [
+            row(collection_id, **metadata, tag="nightly"),
+            row(collection_id, **metadata, tag="release"),
+            row(collection_id, **metadata),
+        ],
+        records,
+        {},
+    )
 
     assert skipped == []
     assert plan[0]["catalog_id"] == backfill.user_catalog_id("alice")

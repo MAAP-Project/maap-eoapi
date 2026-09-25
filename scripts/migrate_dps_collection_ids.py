@@ -21,13 +21,23 @@ environment variables configured (requires uv)::
 
     uv run --script scripts/migrate_dps_collection_ids.py --database-url "" --dry-run
     uv run --script scripts/migrate_dps_collection_ids.py --database-url "" --apply
+    uv run --script scripts/migrate_dps_collection_ids.py --database-url "" \\
+        --apply --batch-size 100
 
 The empty --database-url tells psycopg to use the PG* environment variables.
-Omitting it uses DATABASE_URL or the local Compose default instead.
+Omitting it uses DATABASE_URL or the local Compose default instead. Apply uses
+100 source collections per transaction by default; this default is not
+production-validated. Destination groups are split across batches when needed;
+the first chunk creates the destination collection and later chunks append to
+it. Completed batches remain committed if a later batch fails; rerun after
+fixing the failure to complete the remaining work. Metadata-only updates for
+retained collision sources are batched too.
 Before applying, review the dry-run plan, confirm a recoverable backup, pause
-writers, and drain in-flight ingestion. The conflict check does not prevent
-concurrent writes. Verify collection and item counts and check pgSTAC queued
-work before resuming ingestion; the deployed stack enables use_queue.
+all writers, and drain in-flight ingestion and existing pgSTAC queued work.
+Apply disables queueing only within each batch transaction. The conflict check
+does not prevent concurrent writes. Verify collection and item counts and check
+pgSTAC queued work before resuming ingestion; the deployed stack enables
+use_queue.
 """
 
 from __future__ import annotations
@@ -43,6 +53,7 @@ from psycopg.rows import dict_row
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATABASE_URL = "postgresql://username:password@127.0.0.1:5439/postgis"
+DEFAULT_BATCH_SIZE = 100
 
 
 def target_collection_id(collection_id: str) -> str | None:
@@ -70,80 +81,99 @@ def conflicting_source_collections(
     connection: Any, plan: dict[str, list[str]]
 ) -> list[str]:
     """Return legacy collections containing items that conflict after merging."""
-    sources = [source for source_ids in plan.values() for source in source_ids]
-    if not sources:
-        return []
-
+    skipped: set[str] = set()
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            WITH migrated_items AS (
-                SELECT
-                    COALESCE(mapping.target_id, items.collection) AS target_id,
-                    items.collection AS source_id,
-                    items.id
+        for target_id, source_ids in plan.items():
+            LOGGER.info("Checking item-ID conflicts for %s", target_id)
+            cursor.execute(
+                """
+                WITH conflicts AS (
+                    SELECT id
+                    FROM pgstac.items
+                    WHERE collection = ANY(%s)
+                    GROUP BY id
+                    HAVING count(*) > 1
+                )
+                SELECT DISTINCT items.collection AS source_id
                 FROM pgstac.items
-                LEFT JOIN unnest(%s::text[], %s::text[])
-                    AS mapping(source_id, target_id)
-                    ON items.collection = mapping.source_id
+                JOIN conflicts USING (id)
                 WHERE items.collection = ANY(%s)
-                   OR items.collection = ANY(%s)
-            ), conflicts AS (
-                SELECT target_id, id
-                FROM migrated_items
-                GROUP BY target_id, id
-                HAVING count(*) > 1
+                """,
+                ([target_id, *source_ids], source_ids),
             )
-            SELECT DISTINCT migrated_items.source_id
-            FROM migrated_items
-            JOIN conflicts USING (target_id, id)
-            WHERE migrated_items.source_id = ANY(%s)
-            ORDER BY migrated_items.source_id
-            """,
-            (
-                sources,
-                [target for target, source_ids in plan.items() for _ in source_ids],
-                sources,
-                list(plan),
-                sources,
-            ),
-        )
-        return [row["source_id"] for row in cursor.fetchall()]
+            skipped.update(row["source_id"] for row in cursor.fetchall())
+    return sorted(skipped)
 
 
 def conflicting_item_ids(connection: Any, plan: dict[str, list[str]]) -> list[str]:
     """Return item-ID conflicts that would be created by the migration."""
-    sources = [source for source_ids in plan.values() for source in source_ids]
-    if not sources:
-        return []
-
+    conflicts: list[str] = []
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT target_id, id
-            FROM (
-                SELECT
-                    COALESCE(mapping.target_id, items.collection) AS target_id,
-                    items.id
+        for target_id, source_ids in sorted(plan.items()):
+            cursor.execute(
+                """
+                SELECT id
                 FROM pgstac.items
-                LEFT JOIN unnest(%s::text[], %s::text[])
-                    AS mapping(source_id, target_id)
-                    ON items.collection = mapping.source_id
-                WHERE items.collection = ANY(%s)
-                   OR items.collection = ANY(%s)
-            ) AS migrated_items
-            GROUP BY target_id, id
-            HAVING count(*) > 1
-            ORDER BY target_id, id
-            """,
-            (
-                sources,
-                [target for target, source_ids in plan.items() for _ in source_ids],
-                sources,
-                list(plan),
-            ),
-        )
-        return [f"{row['target_id']}/{row['id']}" for row in cursor.fetchall()]
+                WHERE collection = ANY(%s)
+                GROUP BY id
+                HAVING count(*) > 1
+                ORDER BY id
+                """,
+                ([target_id, *source_ids],),
+            )
+            conflicts.extend(f"{target_id}/{row['id']}" for row in cursor.fetchall())
+    return conflicts
+
+
+def migration_batches(
+    plan: dict[str, list[str]], skipped_sources: list[str], batch_size: int
+) -> list[tuple[dict[str, list[str]], list[str]]]:
+    """Split migration and metadata work into source-collection-sized batches."""
+    groups = [
+        ({target_id: source_ids[start : start + batch_size]}, [])
+        for target_id, source_ids in sorted(plan.items())
+        for start in range(0, len(source_ids), batch_size)
+    ]
+    groups.extend(({}, [source_id]) for source_id in skipped_sources)
+
+    batches: list[tuple[dict[str, list[str]], list[str]]] = []
+    batch_plan: dict[str, list[str]] = {}
+    batch_skipped: list[str] = []
+    source_count = 0
+    for group_plan, group_skipped in groups:
+        group_size = sum(map(len, group_plan.values())) + len(group_skipped)
+        if source_count and source_count + group_size > batch_size:
+            batches.append((batch_plan, batch_skipped))
+            batch_plan, batch_skipped, source_count = {}, [], 0
+        batch_plan.update(group_plan)
+        batch_skipped.extend(group_skipped)
+        source_count += group_size
+    if batch_plan or batch_skipped:
+        batches.append((batch_plan, batch_skipped))
+    return batches
+
+
+def configure_transaction(connection: Any, *, disable_queue: bool) -> None:
+    """Apply the migration's per-transaction resource and queue settings."""
+    connection.execute("SET LOCAL work_mem = '4MB'")
+    connection.execute("SET LOCAL hash_mem_multiplier = 1")
+    connection.execute("SET LOCAL max_parallel_workers_per_gather = 0")
+    connection.execute("SET LOCAL jit = off")
+    if disable_queue:
+        connection.execute("SET LOCAL pgstac.use_queue = false")
+
+
+def positive_batch_size(value: str) -> int:
+    """Parse a strictly positive batch size for the command line."""
+    try:
+        batch_size = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "batch size must be a positive integer"
+        ) from error
+    if batch_size <= 0:
+        raise argparse.ArgumentTypeError("batch size must be a positive integer")
+    return batch_size
 
 
 def apply_item_metadata(connection: Any, source_ids: list[str]) -> None:
@@ -155,7 +185,7 @@ def apply_item_metadata(connection: Any, source_ids: list[str]) -> None:
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO pgstac.items_staging_upsert (content)
+            CREATE TEMP TABLE dps_metadata_items (content) ON COMMIT DROP AS
             SELECT jsonb_set(
                 jsonb_set(
                     jsonb_set(
@@ -186,11 +216,20 @@ def apply_item_metadata(connection: Any, source_ids: list[str]) -> None:
                 [parts[3] for parts in source_parts],
             ),
         )
+        # Finish reading items before pgSTAC's triggers alter their partitions.
+        cursor.execute(
+            "INSERT INTO pgstac.items_staging_upsert (content) "
+            "SELECT content FROM pg_temp.dps_metadata_items"
+        )
+        cursor.execute("DROP TABLE pg_temp.dps_metadata_items")
 
 
 def apply_migration(connection: Any, plan: dict[str, list[str]]) -> None:
     """Create tag-free collections, move their items, and remove old collections."""
     with connection.cursor() as cursor:
+        cursor.execute(
+            "CREATE TEMP TABLE dps_migration_items (content jsonb) ON COMMIT DROP"
+        )
         for target_id, source_ids in plan.items():
             source_id = source_ids[0]
             cursor.execute(
@@ -206,7 +245,7 @@ def apply_migration(connection: Any, plan: dict[str, list[str]]) -> None:
             source_parts = [source_id.split("__") for source_id in source_ids]
             cursor.execute(
                 """
-                INSERT INTO pgstac.items_staging_upsert (content)
+                INSERT INTO pg_temp.dps_migration_items (content)
                 SELECT jsonb_set(
                     jsonb_set(
                         jsonb_set(
@@ -253,12 +292,19 @@ def apply_migration(connection: Any, plan: dict[str, list[str]]) -> None:
                     [parts[3] for parts in source_parts],
                 ),
             )
+            # A separate statement releases the read's active partition scans.
+            cursor.execute(
+                "INSERT INTO pgstac.items_staging_upsert (content) "
+                "SELECT content FROM pg_temp.dps_migration_items"
+            )
+            cursor.execute("TRUNCATE pg_temp.dps_migration_items")
             cursor.execute(
                 "DELETE FROM pgstac.items WHERE collection = ANY(%s)", (source_ids,)
             )
             cursor.execute(
                 "DELETE FROM pgstac.collections WHERE id = ANY(%s)", (source_ids,)
             )
+        cursor.execute("DROP TABLE pg_temp.dps_migration_items")
 
 
 def parse_args() -> argparse.Namespace:
@@ -275,66 +321,132 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dry-run", action="store_true", help="Report changes without applying them."
     )
+    parser.add_argument(
+        "--batch-size",
+        type=positive_batch_size,
+        default=DEFAULT_BATCH_SIZE,
+        help=(
+            "Maximum source collections per apply transaction; destination groups "
+            "are split across batches (default: 100)."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Report or apply the DPS collection-ID migration."""
     args = parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+    )
 
-    with connect(args.database_url, row_factory=dict_row) as connection:
-        plan = migration_plan(connection)
-        if not plan:
-            LOGGER.info("No four-part legacy DPS collection IDs found.")
-            return
+    # Autocommit keeps planning and each apply batch in explicit, short
+    # transactions instead of leaving a planning transaction open.
+    with connect(
+        args.database_url, row_factory=dict_row, autocommit=True
+    ) as connection:
+        with connection.transaction():
+            configure_transaction(connection, disable_queue=False)
+            plan = migration_plan(connection)
+            if not plan:
+                LOGGER.info("No four-part legacy DPS collection IDs found.")
+                return
 
-        skipped_sources = conflicting_source_collections(connection, plan)
-        if skipped_sources:
-            LOGGER.warning(
-                "Skipping %d legacy collection(s) with duplicate item IDs: %s",
-                len(skipped_sources),
-                ", ".join(skipped_sources),
-            )
-            skipped = set(skipped_sources)
-            plan = {
-                target_id: [
-                    source_id for source_id in source_ids if source_id not in skipped
-                ]
-                for target_id, source_ids in plan.items()
-            }
-            plan = {
-                target_id: source_ids
-                for target_id, source_ids in plan.items()
-                if source_ids
-            }
+            skipped_sources = conflicting_source_collections(connection, plan)
+            if skipped_sources:
+                LOGGER.warning(
+                    "Skipping %d legacy collection(s) with duplicate item IDs: %s",
+                    len(skipped_sources),
+                    ", ".join(skipped_sources),
+                )
+                skipped = set(skipped_sources)
+                plan = {
+                    target_id: [
+                        source_id
+                        for source_id in source_ids
+                        if source_id not in skipped
+                    ]
+                    for target_id, source_ids in plan.items()
+                }
+                plan = {
+                    target_id: source_ids
+                    for target_id, source_ids in plan.items()
+                    if source_ids
+                }
 
-        for source_id in skipped_sources:
-            LOGGER.info("%s -> retain collection and add DPS item metadata", source_id)
-        for target_id, source_ids in plan.items():
-            LOGGER.info("%s -> %s", ", ".join(source_ids), target_id)
+            for source_id in skipped_sources:
+                LOGGER.info(
+                    "%s -> retain collection and add DPS item metadata", source_id
+                )
+            for target_id, source_ids in plan.items():
+                LOGGER.info("%s -> %s", ", ".join(source_ids), target_id)
 
-        conflicts = conflicting_item_ids(connection, plan)
-        if conflicts:
-            raise SystemExit(
-                "Refusing to merge duplicate item IDs: " + ", ".join(conflicts)
-            )
-        if args.dry_run or not args.apply:
+            conflicts = conflicting_item_ids(connection, plan)
+            if conflicts:
+                raise SystemExit(
+                    "Refusing to merge duplicate item IDs: " + ", ".join(conflicts)
+                )
+
+            batches = migration_batches(plan, skipped_sources, args.batch_size)
             LOGGER.info(
-                "Dry run. Re-run with --apply to migrate %d collection(s) and add "
-                "DPS item metadata to %d retained collection(s).",
-                sum(map(len, plan.values())),
-                len(skipped_sources),
+                "Proposed %d batch(es), up to %d source collection(s) each.",
+                len(batches),
+                args.batch_size,
             )
-            return
+            for batch_number, (batch_plan, batch_skipped) in enumerate(batches, 1):
+                source_count = sum(map(len, batch_plan.values())) + len(batch_skipped)
+                LOGGER.info(
+                    "Batch %d/%d: %d source collection(s), %d destination group(s)",
+                    batch_number,
+                    len(batches),
+                    source_count,
+                    len(batch_plan),
+                )
 
-        apply_item_metadata(connection, skipped_sources)
-        apply_migration(connection, plan)
+            if args.dry_run or not args.apply:
+                LOGGER.info(
+                    "Dry run. Re-run with --apply to migrate %d collection(s) and add "
+                    "DPS item metadata to %d retained collection(s).",
+                    sum(map(len, plan.values())),
+                    len(skipped_sources),
+                )
+                return
+
+        for batch_number, (batch_plan, batch_skipped) in enumerate(batches, 1):
+            source_count = sum(map(len, batch_plan.values())) + len(batch_skipped)
+            LOGGER.info(
+                "Applying batch %d/%d: %d source collection(s), "
+                "%d destination group(s)",
+                batch_number,
+                len(batches),
+                source_count,
+                len(batch_plan),
+            )
+            try:
+                with connection.transaction():
+                    configure_transaction(connection, disable_queue=True)
+                    apply_item_metadata(connection, batch_skipped)
+                    apply_migration(connection, batch_plan)
+            except Exception:
+                LOGGER.exception(
+                    "Batch %d/%d failed and was rolled back; %d earlier batch(es) "
+                    "remain committed. Restore the connection, fix the error, "
+                    "and rerun.",
+                    batch_number,
+                    len(batches),
+                    batch_number - 1,
+                )
+                raise
+            LOGGER.info("Committed batch %d/%d.", batch_number, len(batches))
+
         LOGGER.info(
             "Migrated %d collection(s) and added DPS item metadata to %d retained "
-            "collection(s).",
+            "collection(s) across %d committed batch(es).",
             sum(map(len, plan.values())),
             len(skipped_sources),
+            len(batches),
         )
 
 
