@@ -16,13 +16,15 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "titiler.pgstac==1.9.0",
-    "titiler.extensions[cogeo]>=0.24,<0.25",
+    "titiler-pgstac==3.2.0",
+    "titiler-extensions[cogeo]==2.3.0",
     "pystac-client==0.9.0",
     "stac-pydantic>=3.1.3",
-    "importlib_resources>=1.1.0;python_version<'3.9'",
     "numpy>=2.3.3",
     "numexpr>=2.13.1",
+    "cogeo-mosaic>=9.2,<10",
+    "titiler-core==2.3.0",
+    "titiler-mosaic==2.3.0",
 ]
 
 [project.optional-dependencies]

@@ -1,6 +1,6 @@
 """settings for titiler-pgstac runtime"""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MosaicSettings(BaseSettings):
@@ -10,8 +10,4 @@ class MosaicSettings(BaseSettings):
     host: str | None
     format: str = ".json.gz"  # format will be ignored for dynamodb backend
 
-    class Config:
-        """model config"""
-
-        env_prefix = "MOSAIC_"
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_prefix="MOSAIC_", env_file=".env")

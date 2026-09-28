@@ -11,9 +11,21 @@ from urllib.parse import urlparse
 from eoapi.raster.main import app
 from eoapi.raster.utils import get_secret_dict
 from fastapi import Request
-from fastapi.routing import APIRoute
 from mangum import Mangum
-from snapshot_restore_py import register_after_restore, register_before_snapshot
+
+try:
+    from snapshot_restore_py import register_after_restore, register_before_snapshot
+except ImportError:
+
+    def register_before_snapshot(func):
+        """Leave snapshot hooks inert outside the Lambda SnapStart runtime."""
+        return func
+
+    def register_after_restore(func):
+        """Leave snapshot hooks inert outside the Lambda SnapStart runtime."""
+        return func
+
+
 from titiler.pgstac.db import connect_to_db
 from titiler.pgstac.settings import PostgresSettings
 
@@ -28,11 +40,11 @@ pgbouncer_host = os.getenv("PGBOUNCER_HOST")
 secret = get_secret_dict(pgstac_secret_arn)
 
 pg_settings = PostgresSettings(
-    postgres_host=pgbouncer_host or secret["host"],
-    postgres_dbname=secret["dbname"],
-    postgres_user=secret["username"],
-    postgres_pass=secret["password"],
-    postgres_port=secret["port"],
+    pghost=pgbouncer_host or secret["host"],
+    pgdatabase=secret["dbname"],
+    pguser=secret["username"],
+    pgpassword=secret["password"],
+    pgport=secret["port"],
 )
 
 
@@ -57,12 +69,11 @@ async def startup_event() -> None:
     templates_start = time.monotonic()
     logger.info("FastAPI startup: Building route templates")
     app.state.path_templates = {}
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            # replace : with _ to make it regexable
-            route_path = route.path.replace(":", "__")
-            pattern = re.sub(r"{([^}]+)}", r"(?P<\1>[^/]+)", route_path)
-            app.state.path_templates[re.compile(f"^{pattern}$")] = route_path
+    for route_path in app.openapi()["paths"]:
+        # Replace : with _ to make it regexable, and template params with groups.
+        route_path = route_path.replace(":", "__")
+        pattern = re.sub(r"{([^}]+)}", r"(?P<\1>[^/]+)", route_path)
+        app.state.path_templates[re.compile(f"^{pattern}$")] = route_path
 
     logger.info(
         "FastAPI startup: Route templates built in "

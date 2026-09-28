@@ -6,14 +6,6 @@ from pydantic import BaseModel, field_validator
 from stac_pydantic.api import Search
 
 
-def to_camel(snake_str: str) -> str:
-    """
-    Converts snake_case_string to camelCaseString
-    """
-    first, *others = snake_str.split("_")
-    return "".join([first.lower(), *map(str.title, others)])
-
-
 # Link and Links derived from models in https://github.com/stac-utils/stac-pydantic
 class Link(BaseModel):
     """Link Relation"""
@@ -60,6 +52,8 @@ class StacApiQueryRequestBody(Search):
         overrides default validation due to issue https://github.com/stac-utils/stac-pydantic/issues/78
         """
         # Single date is interpreted as end date
+        if v is None:
+            return v
         values = v.split("/") if "/" in v else ["..", v]
         dates = []
         for value in values:
@@ -89,24 +83,4 @@ class UrisRequestBody(BaseModel):
 
 
 class TooManyResultsException(Exception):
-    """exception when there are too many STAC API results to generate a mosaicjson"""
-
-    def __init__(self, message):
-        """init"""
-        self.message = message
-
-
-class StoreException(Exception):
-    """exception when there is a problem storing the mosaicjson in the datastore"""
-
-    def __init__(self, message):
-        """init"""
-        self.message = message
-
-
-class UnsupportedOperationException(Exception):
-    """exception for unsupported operation"""
-
-    def __init__(self, message):
-        """init"""
-        self.message = message
+    """A STAC search exceeded the mosaic creation result limit."""
