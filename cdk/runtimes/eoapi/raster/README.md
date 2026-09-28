@@ -10,7 +10,7 @@ pgSTAC tile endpoints now use an explicit tile matrix set. For example:
 - `/searches/{search_id}/WebMercatorQuad/tilejson.json`
 - `/searches/{search_id}/WebMercatorQuad/map.html`
 
-The same route families are available under `/collections/{collection_id}`. Legacy no-TMS tile, TileJSON, and map-viewer paths redirect with HTTP 307 to their `WebMercatorQuad` equivalents. The old `/mosaic` prefix still redirects other routes to `/searches`; `/mosaic/register` and `/mosaic/list` map to `/searches/register` and `/searches/` respectively. Info, point, WMTS, registration, statistics, and tileset-list routes do not get a tile matrix segment injected.
+The same route families are available under `/collections/{collection_id}`. Legacy no-TMS tile, TileJSON, and map-viewer paths redirect with HTTP 307 to their `WebMercatorQuad` equivalents. Legacy `@{scale}x` tiles become unscaled tile paths with `tilesize=256*scale`; an explicit `tilesize` wins. Legacy TileJSON `tile_scale` becomes `tilesize` (including the old default scale of 1). TMS-qualified WMTS capability paths redirect to the native unqualified endpoint, which advertises all configured TMSs; the released WMTS extension has no parameter to limit the document to one TMS. The old `/mosaic` prefix still redirects other routes to `/searches`; `/mosaic/register` and `/mosaic/list` map to `/searches/register` and `/searches/` respectively. Info, point, WMTS, registration, statistics, and tileset-list routes do not get a tile matrix segment injected.
 
 The custom `/mosaics` creation and resource API remains available. Its native tile routes are TMS-qualified, for example `/mosaics/{mosaic_id}/tiles/WebMercatorQuad/{z}/{x}/{y}`.
 

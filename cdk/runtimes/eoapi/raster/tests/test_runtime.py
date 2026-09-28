@@ -32,17 +32,27 @@ from eoapi.raster.main import app
         (
             "GET",
             "/mosaic/search-1/tiles/1/2/3@2x.webp",
-            "/searches/search-1/tiles/WebMercatorQuad/1/2/3@2x.webp",
+            "/searches/search-1/tiles/WebMercatorQuad/1/2/3.webp?tilesize=512",
+        ),
+        (
+            "GET",
+            "/mosaic/search-1/tiles/1/2/3@3x.png?tilesize=640&other=a%2Fb",
+            "/searches/search-1/tiles/WebMercatorQuad/1/2/3.png?tilesize=640&other=a%2Fb",
+        ),
+        (
+            "GET",
+            "/mosaic/search-1/tilejson.json",
+            "/searches/search-1/WebMercatorQuad/tilejson.json?tilesize=256",
+        ),
+        (
+            "GET",
+            "/mosaic/search-1/tilejson.json?tile_scale=3&tilesize=768&other=a%2Fb",
+            "/searches/search-1/WebMercatorQuad/tilejson.json?tilesize=768&other=a%2Fb",
         ),
         (
             "GET",
             "/mosaic/search-1/tiles/1/2/3/assets",
             "/searches/search-1/tiles/WebMercatorQuad/1/2/3/assets",
-        ),
-        (
-            "GET",
-            "/mosaic/search-1/tilejson.json",
-            "/searches/search-1/WebMercatorQuad/tilejson.json",
         ),
         (
             "GET",
@@ -57,7 +67,7 @@ from eoapi.raster.main import app
         (
             "GET",
             "/collections/c-1/tiles/1/2/3@2x.webp",
-            "/collections/c-1/tiles/WebMercatorQuad/1/2/3@2x.webp",
+            "/collections/c-1/tiles/WebMercatorQuad/1/2/3.webp?tilesize=512",
         ),
         (
             "GET",
@@ -66,8 +76,8 @@ from eoapi.raster.main import app
         ),
         (
             "GET",
-            "/collections/c-1/tilejson.json",
-            "/collections/c-1/WebMercatorQuad/tilejson.json",
+            "/collections/c-1/tilejson.json?tile_scale=2&token=a%2Fb",
+            "/collections/c-1/WebMercatorQuad/tilejson.json?token=a%2Fb&tilesize=512",
         ),
         (
             "GET",
@@ -79,10 +89,15 @@ from eoapi.raster.main import app
         ("GET", "/mosaic/search-1/info", "/searches/search-1/info"),
         (
             "GET",
-            "/mosaic/search-1/WMTSCapabilities.xml",
-            "/searches/search-1/WMTSCapabilities.xml",
+            "/mosaic/search-1/WebMercatorQuad/WMTSCapabilities.xml?x=a%2Fb",
+            "/searches/search-1/WMTSCapabilities.xml?x=a%2Fb",
         ),
         ("GET", "/mosaic/search-1/statistics", "/searches/search-1/statistics"),
+        (
+            "GET",
+            "/collections/c-1/WebMercatorQuad/WMTSCapabilities.xml",
+            "/collections/c-1/WMTSCapabilities.xml",
+        ),
     ],
 )
 def test_legacy_redirects_preserve_methods_and_queries(method, path, location):
@@ -91,6 +106,48 @@ def test_legacy_redirects_preserve_methods_and_queries(method, path, location):
 
     assert response.status_code == 307
     assert response.headers["location"] == location
+
+
+@pytest.mark.parametrize(
+    ("legacy_path", "native_path", "expected_status"),
+    [
+        (
+            "/mosaic/s-1/tiles/1/2/3@2x.png",
+            "/searches/s-1/tiles/WebMercatorQuad/1/2/3.png",
+            None,
+        ),
+        (
+            "/mosaic/s-1/WebMercatorQuad/WMTSCapabilities.xml",
+            "/searches/s-1/WMTSCapabilities.xml",
+            None,
+        ),
+        (
+            "/collections/c-1/WebMercatorQuad/WMTSCapabilities.xml",
+            "/collections/c-1/WMTSCapabilities.xml",
+            None,
+        ),
+        (
+            "/collections/c-1/map.html",
+            "/collections/c-1/WebMercatorQuad/map.html",
+            None,
+        ),
+    ],
+)
+def test_legacy_redirects_resolve_through_native_routes(
+    legacy_path, native_path, expected_status
+):
+    """Redirects reach registered 2.3 routes, not merely plausible URLs."""
+    response = TestClient(app, raise_server_exceptions=False).get(
+        legacy_path, follow_redirects=True
+    )
+
+    assert response.history[0].status_code == 307
+    assert response.url.path == native_path
+    if expected_status is None:
+        # pgSTAC needs a database; a 404 would indicate a bad native route.
+        assert response.status_code != 404
+    else:
+        assert response.status_code == expected_status
 
 
 def test_canonical_collection_paths_are_not_compatibility_redirects():

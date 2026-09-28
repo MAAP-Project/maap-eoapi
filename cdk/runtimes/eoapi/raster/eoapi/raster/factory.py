@@ -7,6 +7,7 @@ import re
 import uuid
 from functools import partial
 from typing import Annotated
+from urllib.parse import unquote_plus
 
 from cogeo_mosaic.backends import DynamoDBBackend, MosaicBackend
 from cogeo_mosaic.errors import MosaicError, MosaicExistsError
@@ -390,9 +391,26 @@ async def post_mosaics(
     return mk_mosaic_entity(mosaic_id, self_uri)
 
 
-def _redirect(request: Request, path: str) -> RedirectResponse:
-    """Redirect while preserving the original query string and method."""
-    query = request.scope["query_string"].decode("latin-1")
+def _redirect(
+    request: Request,
+    path: str,
+    *,
+    tilesize: int | None = None,
+    remove_tile_scale: bool = False,
+) -> RedirectResponse:
+    """Redirect while preserving unrelated query parameters and the method."""
+    parts = request.scope["query_string"].decode("latin-1").split("&")
+    keys = [unquote_plus(part.partition("=")[0]) for part in parts if part]
+    has_tilesize = "tilesize" in keys
+    if remove_tile_scale:
+        parts = [
+            part
+            for part in parts
+            if unquote_plus(part.partition("=")[0]) != "tile_scale"
+        ]
+    if tilesize is not None and not has_tilesize:
+        parts.append(f"tilesize={tilesize}")
+    query = "&".join(part for part in parts if part)
     return RedirectResponse(f"{path}?{query}" if query else path, status_code=307)
 
 
@@ -400,36 +418,61 @@ def redirect_collection_compatibility(request: Request) -> RedirectResponse | No
     """Redirect only legacy collection paths missing their tile matrix set."""
     path = request.url.path
     if match := re.fullmatch(
-        r"/collections/([^/]+)/tiles/(\d+)/(\d+)/(\d+(?:@\d+x)?(?:\.[\w-]+)?)(/assets)?",
+        r"/collections/([^/]+)/tiles/(\d+)/(\d+)/(\d+)(?:@(\d+)x)?(\.[\w-]+)?(/assets)?",
         path,
     ):
-        collection_id, z, x, y, assets = match.groups()
-        target = f"/collections/{collection_id}/tiles/WebMercatorQuad/{z}/{x}/{y}"
-        return _redirect(request, target + (assets or ""))
+        collection_id, z, x, y, scale, extension, assets = match.groups()
+        target = (
+            f"/collections/{collection_id}/tiles/WebMercatorQuad/"
+            f"{z}/{x}/{y}{extension or ''}"
+        )
+        tilesize = 256 * int(scale) if scale and not assets else None
+        return _redirect(request, target + (assets or ""), tilesize=tilesize)
+
+    if match := re.fullmatch(
+        r"/collections/([^/]+)/([^/]+)/WMTSCapabilities\.xml", path
+    ):
+        collection_id, _ = match.groups()
+        return _redirect(request, f"/collections/{collection_id}/WMTSCapabilities.xml")
 
     if match := re.fullmatch(r"/collections/([^/]+)/(tilejson\.json|map\.html)", path):
         collection_id, endpoint = match.groups()
+        if endpoint == "tilejson.json":
+            try:
+                tile_scale = int(request.query_params.get("tile_scale", "1"))
+            except ValueError as e:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY) from e
+            if not 0 < tile_scale < 4:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY)
+            return _redirect(
+                request,
+                f"/collections/{collection_id}/WebMercatorQuad/{endpoint}",
+                tilesize=256 * tile_scale,
+                remove_tile_scale=True,
+            )
         return _redirect(
             request, f"/collections/{collection_id}/WebMercatorQuad/{endpoint}"
         )
     return None
 
 
-def _redirect_search_id(search_id: str | None, _collection_id: str | None) -> str:
+def _redirect_search_id(
+    search_id: str | None, _collection_id: str | None = None
+) -> str:
     """Return the native pgSTAC search path for a legacy route."""
     return f"/searches/{search_id}"
 
 
 @router.api_route(
-    "/mosaic/{search_id}/tiles/{z}/{x}/{y}",
+    "/mosaic/{search_id}/tiles/{z:int}/{x:int}/{y:int}",
     methods=["GET", "HEAD"],
     include_in_schema=False,
 )
 async def redirect_tiles(
     request: Request,
-    z: str,
-    x: str,
-    y: str,
+    z: int,
+    x: int,
+    y: int,
     search_id: str | None = None,
     collection_id: str | None = None,
 ):
@@ -439,15 +482,15 @@ async def redirect_tiles(
 
 
 @router.api_route(
-    "/mosaic/{search_id}/tiles/{z}/{x}/{y}.{format}",
+    "/mosaic/{search_id}/tiles/{z:int}/{x:int}/{y:int}.{format}",
     methods=["GET", "HEAD"],
     include_in_schema=False,
 )
 async def redirect_tiles_format(
     request: Request,
-    z: str,
-    x: str,
-    y: str,
+    z: int,
+    x: int,
+    y: int,
     format: str,
     search_id: str | None = None,
     collection_id: str | None = None,
@@ -467,13 +510,17 @@ async def redirect_tiles_scale(
     z: str,
     x: str,
     y: str,
-    scale: str,
+    scale: int,
     search_id: str | None = None,
     collection_id: str | None = None,
 ):
-    """Redirect legacy scaled tile paths to native WebMercatorQuad routes."""
+    """Redirect scaled paths to native tilesize query parameters."""
     target = _redirect_search_id(search_id, collection_id)
-    return _redirect(request, f"{target}/tiles/WebMercatorQuad/{z}/{x}/{y}@{scale}x")
+    return _redirect(
+        request,
+        f"{target}/tiles/WebMercatorQuad/{z}/{x}/{y}",
+        tilesize=256 * scale,
+    )
 
 
 @router.api_route(
@@ -486,15 +533,17 @@ async def redirect_tiles_scale_format(
     z: str,
     x: str,
     y: str,
-    scale: str,
+    scale: int,
     format: str,
     search_id: str | None = None,
     collection_id: str | None = None,
 ):
-    """Redirect legacy scaled formatted tiles to native WebMercatorQuad routes."""
+    """Redirect scaled formatted paths to native tilesize query parameters."""
     target = _redirect_search_id(search_id, collection_id)
     return _redirect(
-        request, f"{target}/tiles/WebMercatorQuad/{z}/{x}/{y}@{scale}x.{format}"
+        request,
+        f"{target}/tiles/WebMercatorQuad/{z}/{x}/{y}.{format}",
+        tilesize=256 * scale,
     )
 
 
@@ -517,6 +566,21 @@ async def redirect_tile_assets(
 
 
 @router.api_route(
+    "/mosaic/{search_id}/{tile_matrix_set_id}/WMTSCapabilities.xml",
+    methods=["GET", "HEAD"],
+    include_in_schema=False,
+)
+async def redirect_wmts(
+    request: Request,
+    search_id: str,
+    tile_matrix_set_id: str,
+):
+    """Redirect the legacy TMS-specific WMTS path to the native endpoint."""
+    target = _redirect_search_id(search_id)
+    return _redirect(request, f"{target}/WMTSCapabilities.xml")
+
+
+@router.api_route(
     "/mosaic/{search_id}/tilejson.json",
     methods=["GET", "HEAD"],
     include_in_schema=False,
@@ -526,9 +590,20 @@ async def redirect_tilejson(
     search_id: str | None = None,
     collection_id: str | None = None,
 ):
-    """Redirect legacy TileJSON paths to native WebMercatorQuad routes."""
+    """Redirect legacy TileJSON scale options to native tilesize parameters."""
+    try:
+        tile_scale = int(request.query_params.get("tile_scale", "1"))
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY) from e
+    if not 0 < tile_scale < 4:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY)
     target = _redirect_search_id(search_id, collection_id)
-    return _redirect(request, f"{target}/WebMercatorQuad/tilejson.json")
+    return _redirect(
+        request,
+        f"{target}/WebMercatorQuad/tilejson.json",
+        tilesize=256 * tile_scale,
+        remove_tile_scale=True,
+    )
 
 
 @router.api_route(
