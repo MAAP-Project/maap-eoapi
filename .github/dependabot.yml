@@ -22,6 +22,28 @@ updates:
     cooldown:
       default-days: 30
 
+  - package-ecosystem: uv
+    directory: /cdk/runtimes/eoapi/raster
+    schedule:
+      interval: monthly
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 30
+
+  - package-ecosystem: uv
+    directory: /cdk/runtimes/eoapi/stac
+    schedule:
+      interval: monthly
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 30
+
   - package-ecosystem: pre-commit
     directory: /
     schedule:
