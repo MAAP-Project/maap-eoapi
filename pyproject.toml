@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aws-cdk-lib==2.267.0",
     "constructs==10.8.1",
-    "eoapi-cdk>=11.7.1",
+    "eoapi-cdk>=11.8.1",
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
 ]
