@@ -60,7 +60,15 @@ export default {
     }
     return stac;
   },
-  authConfig: null,
+  authConfig: {
+    type: "openIdConnect",
+    openIdConnectUrl: "https://keycloak.delta-backend.xyz/realms/maap/.well-known/openid-configuration",
+    oidcConfig: {
+      client_id: "maap-stac-browser",
+      scope: "openid profile email",
+    },
+    description: "Log in with your MAAP account."
+  },
   transactions: "auto",
   transactionsRequireLogin: true,
   transactionsRequirePreflight: true,
