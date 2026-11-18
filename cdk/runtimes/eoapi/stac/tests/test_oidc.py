@@ -1,4 +1,4 @@
-"""Authentication tests / stac-auth-proxy (Keycloak/OIDC) tests for protected read routes."""
+"""Authentication tests / stac-auth-proxy (Keycloak/OIDC) tests."""
 
 from __future__ import annotations
 
@@ -78,6 +78,21 @@ def test_reads_require_a_token(client: TestClient) -> None:
     assert response.status_code == 401
     assert response.json() == {"detail": "Not authenticated"}
 
+
 def test_valid_token_is_accepted(client: TestClient, private_key) -> None:
     response = client.get("/collections", headers=_token(private_key))
     assert response.status_code not in (401, 403)
+
+
+def test_expired_token_is_rejected(client: TestClient, private_key) -> None:
+    headers = _token(private_key, exp=int(time.time()) - 10)
+    assert client.get("/collections", headers=headers).status_code == 401
+
+
+def test_default_has_reads_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MAAP_AUTH_OIDC_DISCOVERY_URL", raising=False)
+    app = create_app(enabled_extensions=set(), connect_to_database=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/collections").status_code not in (401, 403)
