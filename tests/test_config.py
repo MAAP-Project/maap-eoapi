@@ -234,3 +234,13 @@ def test_rejects_catalog_transactions_when_catalogs_disabled(
 def test_build_stack_name(required_env: None) -> None:
     config = Config()
     assert config.build_stack_name("TestService") == "MAAP-STAC-test-TestService"
+
+
+def test_user_stac_collection_transactions_accepts_oidc_mode(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "oidc")
+
+    config = Config()
+    assert config.user_stac_collection_transactions is not None
+    assert config.user_stac_collection_transactions.auth_mode == "oidc"

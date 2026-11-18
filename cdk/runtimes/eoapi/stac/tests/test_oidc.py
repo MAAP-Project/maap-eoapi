@@ -13,6 +13,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from eoapi.stac.main import (
+    CATALOG_TRANSACTION_EXTENSION,
+    CATALOGS_EXTENSION,
+    COLLECTION_TRANSACTION_EXTENSION,
     create_app,
 )
 
@@ -96,3 +99,25 @@ def test_default_has_reads_open(
     app = create_app(enabled_extensions=set(), connect_to_database=False)
     client = TestClient(app, raise_server_exceptions=False)
     assert client.get("/collections").status_code not in (401, 403)
+
+
+@pytest.fixture
+def write_client(oidc_env: None, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """App configured with collection + catalog transactions and OIDC auth, not Basic"""
+    monkeypatch.delenv("MAAP_TRANSACTION_AUTH_MODE", raising=False)
+    app = create_app(
+        enabled_extensions={
+            COLLECTION_TRANSACTION_EXTENSION,
+            CATALOGS_EXTENSION,
+            CATALOG_TRANSACTION_EXTENSION,
+        },
+        connect_to_database=False,
+    )
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_basic_auth_is_not_accepted_for_writes(write_client: TestClient) -> None:
+    response = write_client.post(
+        "/collections", json={}, headers={"Authorization": "Basic fakebasicstring"}
+    )
+    assert response.status_code == 401
