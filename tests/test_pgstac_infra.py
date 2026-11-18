@@ -13,6 +13,7 @@ from aws_cdk import assertions, aws_ec2 as ec2
 
 from cdk.config import (
     CollectionTransactionsConfig,
+    OidcAuthConfig,
     PgStacDbConfig,
     StacApiConfig,
     StacBrowserConfig,
@@ -226,6 +227,89 @@ if (catalog.links.length !== 2 || catalog.links[0].rel !== "data") {{
         )
         assert len(secrets) == 0
         template.resource_count_is("AWS::SSM::Parameter", 1)
+
+    def test_oidc_auth_sets_runtime_env_correctly(self):
+        discovery_url = (
+            "https://keycloak.example.com/realms/maap/.well-known/openid-configuration"
+        )
+        template = build_template(
+            {
+                "type": "internal",
+                "stac_api_config": StacApiConfig(
+                    custom_domain_name="internal-stac.example.com",
+                    oidc=OidcAuthConfig(
+                        discovery_url=discovery_url,
+                        allowed_audiences="account",
+                    ),
+                ),
+            }
+        )
+
+        template.has_resource_properties(
+            "AWS::Lambda::Function",
+            {
+                "Handler": "eoapi.stac.handler.handler",
+                "Environment": {
+                    "Variables": assertions.Match.object_like(
+                        {
+                            "MAAP_AUTH_OIDC_DISCOVERY_URL": discovery_url,
+                            "MAAP_AUTH_UPSTREAM_URL": "https://internal-stac.example.com",
+                            "MAAP_AUTH_ALLOWED_JWT_AUDIENCES": "account",
+                        }
+                    )
+                },
+            },
+        )
+
+    def test_oidc_auth_is_off_without_config(self):
+        template = build_template()
+        functions = template.find_resources(
+            "AWS::Lambda::Function",
+            {"Properties": {"Handler": "eoapi.stac.handler.handler"}},
+        )
+        assert functions
+        for fn in functions.values():
+            variables = fn["Properties"]["Environment"]["Variables"]
+            assert not any(key.startswith("MAAP_AUTH_") for key in variables)
+
+    def test_oidc_transactions_creates_no_basic_auth_secret(self):
+        template = build_template(
+            {
+                "type": "internal",
+                "stac_api_config": StacApiConfig(
+                    custom_domain_name="internal-stac.example.com",
+                    oidc=OidcAuthConfig(discovery_url="https://keycoak.example/oidc"),
+                    transactions=CollectionTransactionsConfig(auth_mode="oidc"),
+                    catalogs=StacCatalogsConfig(
+                        enabled=True,
+                        transactions=CollectionTransactionsConfig(auth_mode="oidc"),
+                    ),
+                ),
+            }
+        )
+
+        functions = template.find_resources(
+            "AWS::Lambda::Function",
+            {"Properties": {"Handler": "eoapi.stac.handler.handler"}},
+        )
+        assert functions
+        for fn in functions.values():
+            variables = fn["Properties"]["Environment"]["Variables"]
+            assert "collection_transaction" in variables["ENABLED_EXTENSIONS"]
+            assert "catalog_transaction" in variables["ENABLED_EXTENSIONS"]
+            assert "MAAP_AUTH_OIDC_DISCOVERY_URL" in variables
+            assert not any(k.startswith("MAAP_TRANSACTION_AUTH_") for k in variables)
+        secrets = template.find_resources(
+            "AWS::SecretsManager::Secret",
+            {
+                "Properties": {
+                    "Name": (
+                        "/maap-eoapi/test/internal/stac-collection-transaction-basic-auth"
+                    )
+                }
+            },
+        )
+        assert len(secrets) == 0
 
     def test_enables_collection_transactions_with_stack_managed_secret(self):
         template = build_template(
