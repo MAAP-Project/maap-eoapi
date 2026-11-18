@@ -132,18 +132,29 @@ class PgStacInfra(Stack):
         if catalog_transactions_config and not catalogs_enabled:
             raise ValueError("STAC catalog transactions require catalogs to be enabled")
 
-        if transactions_config and transactions_config.auth_mode != "basic":
+        if transactions_config and transactions_config.auth_mode not in (
+            "basic",
+            "oidc",
+        ):
             raise ValueError(
                 f"Unsupported STAC collection transaction auth mode: "
                 f"{transactions_config.auth_mode}"
             )
         if (
             catalog_transactions_config
-            and catalog_transactions_config.auth_mode != "basic"
+            and catalog_transactions_config.auth_mode not in ("basic", "oidc")
         ):
             raise ValueError(
                 f"Unsupported STAC catalog transaction auth mode: "
                 f"{catalog_transactions_config.auth_mode}"
+            )
+        if (
+            transactions_config
+            and catalog_transactions_config
+            and transactions_config.auth_mode != catalog_transactions_config.auth_mode
+        ):
+            raise ValueError(
+                "STAC collection and catalog transactions must use the same auth mode"
             )
         if (
             transactions_config
@@ -158,7 +169,24 @@ class PgStacInfra(Stack):
 
         write_transactions_config = transactions_config or catalog_transactions_config
 
-        if write_transactions_config:
+        write_auth_mode = (
+            write_transactions_config.auth_mode if write_transactions_config else None
+        )
+        if stac_api_config.oidc:
+            if write_auth_mode not in (None, "oidc"):
+                raise ValueError(
+                    "STAC transactions must use auth mode 'oidc' when OIDC auth is "
+                    "enabled"
+                )
+        elif write_auth_mode == "oidc":
+            raise ValueError(
+                "STAC transactions with auth mode 'oidc' need OIDC auth to be "
+                "configured (set USER_STAC_OIDC_DISCOVERY_URL)"
+            )
+
+        uses_basic_auth = write_auth_mode == "basic"
+
+        if write_transactions_config and uses_basic_auth:
             if write_transactions_config.auth_secret_arn:
                 transaction_auth_secret: secretsmanager.ISecret | None = (
                     secretsmanager.Secret.from_secret_complete_arn(
@@ -217,12 +245,46 @@ class PgStacInfra(Stack):
             ),
             **(
                 {
+                    "MAAP_AUTH_OIDC_DISCOVERY_URL": stac_api_config.oidc.discovery_url,
+                    **(
+                        {
+                            "MAAP_AUTH_UPSTREAM_URL": (
+                                f"https://{stac_api_config.custom_domain_name}"
+                            )
+                        }
+                        if stac_api_config.custom_domain_name
+                        else {}
+                    ),
+                    **(
+                        {
+                            "MAAP_AUTH_ALLOWED_JWT_AUDIENCES": (
+                                stac_api_config.oidc.allowed_audiences
+                            )
+                        }
+                        if stac_api_config.oidc.allowed_audiences
+                        else {}
+                    ),
+                    **(
+                        {
+                            "MAAP_AUTH_SWAGGER_CLIENT_ID": (
+                                stac_api_config.oidc.swagger_client_id
+                            )
+                        }
+                        if stac_api_config.oidc.swagger_client_id
+                        else {}
+                    ),
+                }
+                if stac_api_config.oidc
+                else {}
+            ),
+            **(
+                {
                     "MAAP_TRANSACTION_AUTH_MODE": write_transactions_config.auth_mode,
                     "MAAP_TRANSACTION_AUTH_SECRET_ARN": (
                         transaction_auth_secret.secret_arn  # type: ignore [union-attr]
                     ),
                 }
-                if write_transactions_config
+                if write_transactions_config and uses_basic_auth
                 else {}
             ),
         }

@@ -30,7 +30,7 @@ class TitilerPgstacConfig:
     custom_domain_name: str | None = None
 
 
-TransactionAuthMode = Literal["basic", "jwt"]
+TransactionAuthMode = Literal["basic", "jwt", "oidc"]
 
 
 @dataclass
@@ -40,9 +40,22 @@ class CollectionTransactionsConfig:
 
 
 @dataclass
+class OidcAuthConfig:
+    """
+    Require an OIDC (Keycloak) bearer token on every STAC API
+    route enforced in the STAC runtime by stac-auth-proxy
+    """
+
+    discovery_url: str
+    allowed_audiences: str | None = None
+    swagger_client_id: str | None = None
+
+
+@dataclass
 class StacApiConfig:
     custom_domain_name: str | None = None
     integration_api_arn: str | None = None
+    oidc: OidcAuthConfig | None = None
     transactions: CollectionTransactionsConfig | None = None
     catalogs: StacCatalogsConfig | None = None
 
@@ -119,6 +132,14 @@ class Config(BaseSettings):
     user_stac_inbound_topic_arns: list[str] | None = None
     user_stac_collection_id_registry: dict[str, list[str]] | None = None
 
+    # --- For OIDC auth using Keycloak via stac-auth-proxy ---
+    # Set the discovery URL to require a token on all user STAC API routes
+    user_stac_oidc_discovery_url: str | None = None
+    # This is a comma-separated list of accepted JWT aud values
+    user_stac_oidc_allowed_audiences: str | None = None
+    # Public Keycloak client that is used by Swagger UI (/api.html) to log in
+    user_stac_oidc_swagger_client_id: str | None = None
+
     # --- Collection transactions env fields ---
     user_stac_collection_transactions_auth_mode: TransactionAuthMode | None = None
     user_stac_collection_transactions_auth_secret_arn: str | None = None
@@ -140,10 +161,10 @@ class Config(BaseSettings):
             return None
         if isinstance(v, str):
             normalized = v.strip().lower()
-            if normalized in {"basic", "jwt"}:
+            if normalized in {"basic", "jwt", "oidc"}:
                 return normalized
         raise ValueError(
-            f"Unsupported auth mode: {v!r}. Expected one of: 'basic', 'jwt'."
+            f"Unsupported auth mode: {v!r}. Expected one of: 'basic', 'jwt', 'oidc'."
         )
 
     @field_validator("db_instance_type", mode="before")
@@ -222,10 +243,10 @@ class Config(BaseSettings):
                 "USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN is set."
             )
 
-        if (auth_mode or auth_secret_arn) and auth_mode != "basic":
+        if (auth_mode or auth_secret_arn) and auth_mode not in ("basic", "oidc"):
             raise ValueError(
                 f"Unsupported USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE: "
-                f'"{auth_mode}". Expected "basic".'
+                f'"{auth_mode}". Expected "basic" or "oidc".'
             )
 
         return self
@@ -235,10 +256,10 @@ class Config(BaseSettings):
         auth_mode = self.user_stac_collection_transactions_auth_mode
         auth_secret_arn = self.user_stac_collection_transactions_auth_secret_arn
 
-        if (auth_mode or auth_secret_arn) and auth_mode != "basic":
+        if (auth_mode or auth_secret_arn) and auth_mode not in ("basic", "oidc"):
             raise ValueError(
                 f"Unsupported USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE: "
-                f'"{auth_mode}". Expected "basic".'
+                f'"{auth_mode}". Expected "basic" or "oidc".'
             )
 
         return self
@@ -252,7 +273,23 @@ class Config(BaseSettings):
             return None
         return CollectionTransactionsConfig(
             auth_mode=self.user_stac_collection_transactions_auth_mode,
-            auth_secret_arn=self.user_stac_collection_transactions_auth_secret_arn,
+            # The secret holds Basic auth credentials, so have OIDC mode ignore it
+            auth_secret_arn=(
+                self.user_stac_collection_transactions_auth_secret_arn
+                if self.user_stac_collection_transactions_auth_mode == "basic"
+                else None
+            ),
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def user_stac_oidc(self) -> OidcAuthConfig | None:
+        if not self.user_stac_oidc_discovery_url:
+            return None
+        return OidcAuthConfig(
+            discovery_url=self.user_stac_oidc_discovery_url,
+            allowed_audiences=self.user_stac_oidc_allowed_audiences,
+            swagger_client_id=self.user_stac_oidc_swagger_client_id,
         )
 
     @computed_field  # type: ignore[prop-decorator]
@@ -262,7 +299,11 @@ class Config(BaseSettings):
         if self.user_stac_catalog_transactions_auth_mode is not None:
             catalog_transactions = CollectionTransactionsConfig(
                 auth_mode=self.user_stac_catalog_transactions_auth_mode,
-                auth_secret_arn=self.user_stac_catalog_transactions_auth_secret_arn,
+                auth_secret_arn=(
+                    self.user_stac_catalog_transactions_auth_secret_arn
+                    if self.user_stac_catalog_transactions_auth_mode == "basic"
+                    else None
+                ),
             )
 
         return StacCatalogsConfig(
@@ -297,6 +338,7 @@ class Config(BaseSettings):
     def user_stac_api(self) -> StacApiConfig:
         return StacApiConfig(
             custom_domain_name=self.user_stac_stac_api_custom_domain_name,
+            oidc=self.user_stac_oidc,
             transactions=self.user_stac_collection_transactions,
             catalogs=self.user_stac_catalogs,
         )
