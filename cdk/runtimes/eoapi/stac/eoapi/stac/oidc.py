@@ -63,6 +63,10 @@ def configure_oidc_auth(app: FastAPI, api_settings: Settings) -> FastAPI:
         rf"^{re.escape(api_settings.openapi_url)}$": ["GET"],
         rf"^{re.escape(api_settings.docs_url)}$": ["GET"],
     }
+    if app.swagger_ui_oauth2_redirect_url:
+        public_endpoints[rf"^{re.escape(app.swagger_ui_oauth2_redirect_url)}$"] = [
+            "GET"
+        ]
 
     configure_app(
         app,
