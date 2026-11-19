@@ -29,6 +29,7 @@ from aws_cdk import (
 from .config import (
     DpsStacItemGenConfig,
     IngestorConfig,
+    OidcAuthConfig,
     PgStacDbConfig,
     StacApiConfig,
     StacBrowserConfig,
@@ -44,6 +45,44 @@ if TYPE_CHECKING:
     from constructs import Construct
 
 _CDK_DIR = Path(__file__).parent
+_USER_BROWSER_CONFIG = _CDK_DIR / "stac_browser_user_config.js"
+_AUTH_CONFIG_PLACEHOLDER = "authConfig: null,"
+
+
+def _user_stac_browser_config_path(oidc: OidcAuthConfig | None) -> str:
+    """Path of the user STAC Browser config, with OIDC login added if enabled"""
+    if not oidc:
+        return str(_USER_BROWSER_CONFIG)
+    if not oidc.swagger_client_id:
+        raise ValueError(
+            "USER_STAC_OIDC_SWAGGER_CLIENT_ID is required when OIDC auth is "
+            "enabled, because the STAC Browser logs in with the same client"
+        )
+
+    source = _USER_BROWSER_CONFIG.read_text()
+    if source.count(_AUTH_CONFIG_PLACEHOLDER) != 1:
+        raise ValueError(
+            f"{_USER_BROWSER_CONFIG.name} must contain exactly one "
+            f"'{_AUTH_CONFIG_PLACEHOLDER}' line"
+        )
+    auth_config = json.dumps(
+        {
+            "type": "openIdConnect",
+            "openIdConnectUrl": oidc.discovery_url,
+            "oidcConfig": {
+                "client_id": oidc.swagger_client_id,
+                "scope": "openid profile email",
+            },
+            "description": "Log in with your MAAP account.",
+        },
+        indent=2,
+    )
+    generated = _CDK_DIR / ".generated" / _USER_BROWSER_CONFIG.name
+    generated.parent.mkdir(exist_ok=True)
+    generated.write_text(
+        source.replace(_AUTH_CONFIG_PLACEHOLDER, f"authConfig: {auth_config},")
+    )
+    return str(generated)
 
 
 class PgStacInfra(Stack):
@@ -672,7 +711,7 @@ class PgStacInfra(Stack):
                 github_repo_tag=stac_browser_config.repo_tag,
                 clone_directory=f"./stac-browser-{type}",
                 config_file_path=(
-                    str(_CDK_DIR / "stac_browser_user_config.js")
+                    _user_stac_browser_config_path(stac_api_config.oidc)
                     if type == "internal"
                     else None
                 ),

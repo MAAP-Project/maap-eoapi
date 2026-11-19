@@ -109,6 +109,46 @@ class TestPgStacInfraStacRuntimeWiring:
             Path(__file__).parents[1] / "cdk" / "stac_browser_user_config.js"
         )
 
+    @staticmethod
+    def _user_browser_overrides(oidc: OidcAuthConfig) -> dict:
+        return {
+            "type": "internal",
+            "stac_api_config": StacApiConfig(
+                custom_domain_name="user-stac-api.example.com", oidc=oidc
+            ),
+            "stac_browser_config": StacBrowserConfig(
+                repo_tag="v5.1.0",
+                custom_domain_name="user-browser.example.com",
+                certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/fakecert",
+            ),
+        }
+
+    def test_user_stac_browser_login_uses_oidc_settings(self):
+        browser_kwargs = {}
+
+        def fake_stac_browser(scope, id, **kwargs):
+            browser_kwargs.update(kwargs)
+
+        oidc = OidcAuthConfig(
+            discovery_url="https://keycloak.example/realms/test/.well-known/openid-configuration",
+            swagger_client_id="test-browser-client",
+        )
+        with patch("cdk.pgstac_infra.eoapi_cdk.StacBrowser", fake_stac_browser):
+            build_template(self._user_browser_overrides(oidc))
+
+        generated = Path(browser_kwargs["config_file_path"]).read_text()
+        assert oidc.discovery_url in generated
+        assert '"client_id": "test-browser-client"' in generated
+        assert "authConfig: null" not in generated
+
+    def test_user_stac_browser_login_requires_a_client_id(self):
+        oidc = OidcAuthConfig(discovery_url="https://keycloak.example/oidc")
+        with (
+            patch("cdk.pgstac_infra.eoapi_cdk.StacBrowser"),
+            pytest.raises(ValueError, match="USER_STAC_OIDC_SWAGGER_CLIENT_ID"),
+        ):
+            build_template(self._user_browser_overrides(oidc))
+
     def test_default_stac_browser_does_not_use_user_config(self):
         browser_kwargs = {}
 

@@ -21,7 +21,7 @@ User STAC catalog configuration:
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` enables catalog write routes and selects the supported auth mode. Catalog write routes require catalogs to stay enabled.
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN` can point at an existing auth secret.
 
-### User-controlled access to DPS STAC API to (Keycloak / OIDC)
+### User-controlled access to DPS STAC API (Keycloak / OIDC)
 
 By default the user STAC API is open for reads. Setting the variable `USER_STAC_OIDC_DISCOVERY_URL` will turn on
 [stac-auth-proxy](https://developmentseed.org/stac-auth-proxy/) inside the STAC Lambda, which
@@ -31,7 +31,7 @@ Relevant Variables for deployment:
 
 - `USER_STAC_OIDC_DISCOVERY_URL` is the realm's `.well-known/openid-configuration` URL. Setting it turns user-controlled access on.
 - `USER_STAC_OIDC_ALLOWED_AUDIENCES` is a comma-separated list of accepted token `aud` values, for example `maap-dps-stac`. This should be set because leaving it unset does not skip the check, and tokens that carry an `aud` are rejected. This audience value should match what is configured in the Keycloak client.
-- `USER_STAC_OIDC_SWAGGER_CLIENT_ID` is the public Keycloak client used by the Swagger UI at `/api.html`, for example `maap-stac-browser`.
+- `USER_STAC_OIDC_SWAGGER_CLIENT_ID` is the public Keycloak client used by the Swagger UI at `/api.html` and by the user STAC Browser login, for example `maap-stac-browser`. It is required when the discovery URL is set. The CDK stack writes this value and the discovery URL into the browser's `authConfig` at synth time
 - `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE=oidc` and `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=oidc` enable the write routes with bearer scopes instead of Basic auth.
 
 Relevant notes:

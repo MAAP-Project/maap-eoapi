@@ -60,15 +60,9 @@ export default {
     }
     return stac;
   },
-  authConfig: {
-    type: "openIdConnect",
-    openIdConnectUrl: "https://keycloak.delta-backend.xyz/realms/maap/.well-known/openid-configuration",
-    oidcConfig: {
-      client_id: "maap-stac-browser",
-      scope: "openid profile email",
-    },
-    description: "Log in with your MAAP account."
-  },
+  // No login by default but when USER_STAC_OIDC_* is set, the
+  // CDK stack replaces this line with an OpenID Connect config at synth time
+  authConfig: null,
   transactions: "auto",
   transactionsRequireLogin: true,
   transactionsRequirePreflight: true,
