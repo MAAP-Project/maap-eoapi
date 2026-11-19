@@ -194,7 +194,8 @@ def parse_enabled_extensions(raw_value: str | None) -> set[str]:
 def _build_middlewares() -> list[Middleware]:
     """Build the middleware stack used by the upstream pgSTAC app."""
     return [
-        Middleware(BrotliMiddleware),
+        # When OIDC is on, stac-auth-proxy does the compression instead
+        *([] if oidc_auth_enabled() else [Middleware(BrotliMiddleware)]),
         Middleware(ProxyHeaderMiddleware),
         Middleware(
             CORSMiddleware,

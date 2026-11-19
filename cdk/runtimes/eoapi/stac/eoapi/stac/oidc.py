@@ -78,7 +78,8 @@ def configure_oidc_auth(app: FastAPI, api_settings: Settings) -> FastAPI:
         private_endpoints=WRITE_ENDPOINTS,
         openapi_spec_endpoint=api_settings.openapi_url,
         swagger_ui_endpoint=api_settings.docs_url,
-        enable_compression=False,
+        enable_compression=True,
+        proxy_options=True,
     )
 
     if settings.swagger_client_id:

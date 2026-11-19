@@ -87,6 +87,33 @@ def test_valid_token_is_accepted(client: TestClient, private_key) -> None:
     assert response.status_code not in (401, 403)
 
 
+def test_swagger_login_redirect_is_public(client: TestClient) -> None:
+    # Keycloak sends the browser here after login, before it has a token
+    response = client.get("/docs/oauth2-redirect")
+    assert response.status_code == 200
+
+
+def test_compression_does_not_break_openapi_login_scheme(
+    client: TestClient,
+) -> None:
+    response = client.get("/api", headers={"Accept-Encoding": "gzip"})
+    assert response.status_code == 200
+    assert "oidcAuth" in response.json()["components"]["securitySchemes"]
+
+
+def test_cors_preflight_is_answered_without_a_token(client: TestClient) -> None:
+    response = client.options(
+        "/collections",
+        headers={
+            "Origin": ORIGIN,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert response.status_code == 200
+    assert "Authorization" in response.headers["access-control-allow-headers"]
+
+
 def test_expired_token_is_rejected(client: TestClient, private_key) -> None:
     headers = _token(private_key, exp=int(time.time()) - 10)
     assert client.get("/collections", headers=headers).status_code == 401
