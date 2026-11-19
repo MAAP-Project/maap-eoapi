@@ -55,6 +55,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
 from eoapi.stac.auth import build_transaction_route_dependencies
+from eoapi.stac.oidc import configure_oidc_auth, oidc_auth_enabled
 from eoapi.stac.transactions import CollectionTransactionExtension
 
 if TYPE_CHECKING:
@@ -193,7 +194,8 @@ def parse_enabled_extensions(raw_value: str | None) -> set[str]:
 def _build_middlewares() -> list[Middleware]:
     """Build the middleware stack used by the upstream pgSTAC app."""
     return [
-        Middleware(BrotliMiddleware),
+        # When OIDC is on, stac-auth-proxy does the compression instead
+        *([] if oidc_auth_enabled() else [Middleware(BrotliMiddleware)]),
         Middleware(ProxyHeaderMiddleware),
         Middleware(
             CORSMiddleware,
@@ -248,7 +250,7 @@ def create_app(
     if with_catalog_transactions and not with_catalogs:
         raise ValueError("catalog_transaction requires catalogs in ENABLED_EXTENSIONS")
 
-    if with_write_transactions:
+    if with_write_transactions and not oidc_auth_enabled():
         transaction_route_dependencies = build_transaction_route_dependencies()
 
     if with_collection_transactions:
@@ -354,7 +356,7 @@ def create_app(
         middlewares=_build_middlewares(),
         health_check=health_check,  # type: ignore[arg-type]
     )
-    return api.app
+    return configure_oidc_auth(api.app, settings)
 
 
 def run() -> None:

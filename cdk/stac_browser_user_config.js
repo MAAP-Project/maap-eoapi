@@ -60,6 +60,8 @@ export default {
     }
     return stac;
   },
+  // No login by default but when USER_STAC_OIDC_* is set, the
+  // CDK stack replaces this line with an OpenID Connect config at synth time
   authConfig: null,
   transactions: "auto",
   transactionsRequireLogin: true,

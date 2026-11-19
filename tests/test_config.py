@@ -120,6 +120,37 @@ def test_user_stac_browser_config(
     )
 
 
+def test_user_stac_oidc_is_disabled_by_default(required_env: None) -> None:
+    assert Config().user_stac_oidc is None
+    assert Config().user_stac_api().oidc is None
+
+
+def test_user_stac_oidc_config(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    discovery_url = (
+        "https://keycloak.example.com/realms/maap/.well-known/openid-configuration"
+    )
+    monkeypatch.setenv("USER_STAC_OIDC_DISCOVERY_URL", discovery_url)
+    monkeypatch.setenv("USER_STAC_OIDC_ALLOWED_AUDIENCES", "account")
+
+    oidc = Config().user_stac_api().oidc
+    assert oidc is not None
+    assert oidc.discovery_url == discovery_url
+    assert oidc.allowed_audiences == "account"
+    assert oidc.swagger_client_id is None
+
+
+def test_user_stac_oidc_swagger_client_id(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("USER_STAC_OIDC_DISCOVERY_URL", "https://keycloak.example.com/d")
+    monkeypatch.setenv("USER_STAC_OIDC_SWAGGER_CLIENT_ID", "test-swagger-client")
+    oidc = Config().user_stac_api().oidc
+    assert oidc is not None
+    assert oidc.swagger_client_id == "test-swagger-client"
+
+
 def test_user_stac_collection_transactions_defaults(
     required_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -151,9 +182,9 @@ def test_user_stac_collection_transactions_accepts_secret(
 def test_user_stac_collection_transactions_rejects_unsupported_auth_mode(
     required_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "jwt")
+    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "fake-auth-mode")
 
-    with pytest.raises(ValueError, match='Expected "basic"'):
+    with pytest.raises(ValueError, match="Unsupported auth mode"):
         Config()
 
 
@@ -203,3 +234,13 @@ def test_rejects_catalog_transactions_when_catalogs_disabled(
 def test_build_stack_name(required_env: None) -> None:
     config = Config()
     assert config.build_stack_name("TestService") == "MAAP-STAC-test-TestService"
+
+
+def test_user_stac_collection_transactions_accepts_oidc_mode(
+    required_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE", "oidc")
+
+    config = Config()
+    assert config.user_stac_collection_transactions is not None
+    assert config.user_stac_collection_transactions.auth_mode == "oidc"

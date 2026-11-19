@@ -21,6 +21,33 @@ User STAC catalog configuration:
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` enables catalog write routes and selects the supported auth mode. Catalog write routes require catalogs to stay enabled.
 - `USER_STAC_CATALOG_TRANSACTIONS_AUTH_SECRET_ARN` can point at an existing auth secret.
 
+### User-controlled access to DPS STAC API (Keycloak / OIDC)
+
+By default the user STAC API is open for reads. Setting the variable `USER_STAC_OIDC_DISCOVERY_URL` will turn on
+[stac-auth-proxy](https://developmentseed.org/stac-auth-proxy/) inside the STAC Lambda, which
+requires a valid Keycloak bearer token on every route.
+
+Relevant Variables for deployment:
+
+- `USER_STAC_OIDC_DISCOVERY_URL` is the realm's `.well-known/openid-configuration` URL. Setting it turns user-controlled access on.
+- `USER_STAC_OIDC_ALLOWED_AUDIENCES` is a comma-separated list of accepted token `aud` values, for example `maap-dps-stac`. This should be set because leaving it unset does not skip the check, and tokens that carry an `aud` are rejected. This audience value should match what is configured in the Keycloak client.
+- `USER_STAC_OIDC_SWAGGER_CLIENT_ID` is the public Keycloak client used by the Swagger UI at `/api.html` and by the user STAC Browser login, for example `maap-stac-browser`. It is required when the discovery URL is set. The CDK stack writes this value and the discovery URL into the browser's `authConfig` at synth time
+- `USER_STAC_COLLECTION_TRANSACTIONS_AUTH_MODE=oidc` and `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=oidc` enable the write routes with bearer scopes instead of Basic auth.
+
+Relevant notes:
+
+- The routes `/_mgmt/ping`, `/api`, `/api.html` and `/docs/oauth2-redirect` are public. Every other route, including the landing page, needs a token, since we want to protect them.
+- Write routes also need scopes: `stac:collection:create|update|delete` and `stac:catalog:create|update|delete`.
+- Basic and bearer auth both use the `Authorization` header, so they can't be combined. Synth should fail if OIDC is on and the transactions mode is set to `basic`, or if a transactions mode is `oidc` without a discovery URL.
+- For issues with configuring auth for the STAC Browser, CloudFront seems to cache the browser files, so invalidate the cache if you still see the old behavior (no login prompt).
+
+#### Keycloak configuration
+
+The Keycloak clients and roles are defined in `veda-keycloak`, which is the source of truth: [dev](https://github.com/NASA-IMPACT/veda-keycloak/blob/main/keycloak-config-cli/config/dev/maap.yml) and [prod](https://github.com/NASA-IMPACT/veda-keycloak/blob/main/keycloak-config-cli/config/prod/maap.yml). When turning on user-controlled access, this API expects:
+
+- a client matching `USER_STAC_OIDC_SWAGGER_CLIENT_ID`, with `https://<api-domain>/docs/oauth2-redirect` as a redirect URI and the API and browser origins as web origins
+- the audience from `USER_STAC_OIDC_ALLOWED_AUDIENCES`, which Keycloak adds to the token for users with the `reader` role on that client
+
 ## DPS-generated STAC items
 
 The DPS item generator assigns unregistered items to collections named
@@ -220,7 +247,7 @@ For a catalogs-enabled deployment, verify:
 
 - OpenAPI includes read-only catalog routes such as `GET /catalogs`, `GET /catalogs/{catalog_id}`, and catalog-scoped collection/item reads.
 - `GET /` includes `rel="child"` links for listed catalogs so STAC Browser can discover catalog roots.
-- catalog write routes are absent unless `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE=basic` is configured.
+- catalog write routes are absent unless `USER_STAC_CATALOG_TRANSACTIONS_AUTH_MODE` is set to `basic` or `oidc`.
 
 The deployment includes a public STAC Browser and, when
 `USER_STAC_BROWSER_CUSTOM_DOMAIN_NAME` and `USER_STAC_BROWSER_CERTIFICATE_ARN` are

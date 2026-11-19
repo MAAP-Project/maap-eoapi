@@ -20,3 +20,6 @@ stac-browser/
 
 dev-docs/plans/
 issue-drafts/
+
+# generated STAC Browser config
+cdk/.generated/
